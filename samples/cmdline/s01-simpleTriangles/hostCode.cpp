@@ -24,6 +24,13 @@
 // external helper stuff for image output
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
+#include <vector>
+#include<fstream>
+#include<iostream>
+#include<sstream>
+#include<string>
+#include<ctime>
+#include<chrono>
 
 #define LOG(message)                                            \
   std::cout << OWL_TERMINAL_BLUE;                               \
@@ -36,45 +43,131 @@
 
 extern "C" char ptxCode[];
 
-const int NUM_VERTICES = 8;
-vec3f vertices[NUM_VERTICES] =
-  {
-    { -1.f,-1.f,-1.f },
-    { +1.f,-1.f,-1.f },
-    { -1.f,+1.f,-1.f },
-    { +1.f,+1.f,-1.f },
-    { -1.f,-1.f,+1.f },
-    { +1.f,-1.f,+1.f },
-    { -1.f,+1.f,+1.f },
-    { +1.f,+1.f,+1.f }
-  };
+struct {
+  std::vector<vec3f> vertices;
+  std::vector<vec3i> indices;
+  std::vector<vec3f> circles; 
+  std::vector<vec3f> radius; 
+}triangles;
 
-const int NUM_INDICES = 12;
+
+
+const int NUM_INDICES = 1;
 vec3i indices[NUM_INDICES] =
   {
-    { 0,1,3 }, { 2,3,0 },
-    { 5,7,6 }, { 5,6,4 },
-    { 0,4,5 }, { 0,5,1 },
-    { 2,3,7 }, { 2,7,6 },
-    { 1,5,7 }, { 1,7,3 },
-    { 4,0,2 }, { 4,2,6 }
+    {0,1,2}
   };
 
 const char *outFileName = "s01-simpleTriangles.png";
-const vec2i fbSize(800,600);
-const vec3f lookFrom(-4.f,-3.f,-2.f);
+const vec2i fbSize(1,1);
+//const vec3f lookFrom(-4.f,-3.f,-2.f);
+const vec3f lookFrom(13.f,2.f,3.f);
+//const vec3f lookFrom(-1.f,-1.f,3.f);
+//const vec3f lookFrom(-3.f,1.f,1.f);
+//const vec3f lookFrom(-0.73f,3.f,-1.f);
 const vec3f lookAt(0.f,0.f,0.f);
 const vec3f lookUp(0.f,1.f,0.f);
 const float cosFovy = 0.66f;
 
+
+
+void createTrianglesFromSphere(float x, float y, float radius)
+{
+        float y_pos_max, y_neg_max, x_pos_max, x_neg_max;
+        y_pos_max = y + radius;
+        y_neg_max = y - radius;
+
+        x_pos_max = x + radius;
+        x_neg_max = x - radius;
+
+        //vertices
+				if(x == 664159)
+				{
+		      std::cout<<x_neg_max<<", "<<y+radius+radius<<", 0"<<"\n";
+		      std::cout<<x_pos_max+radius+0.5*radius<<", "<<y<<", 0"<<"\n";
+		      std::cout<<x_neg_max<<", "<<y-radius-radius<<", 0"<<"\n\n";
+				}
+
+	triangles.circles.push_back(vec3f(x,y,0));
+
+
+	triangles.vertices.push_back(vec3f(x_neg_max, y+radius+radius, 0));//1
+	triangles.vertices.push_back(vec3f(x_pos_max+0.5*radius+radius, y, 0));//2
+	triangles.vertices.push_back(vec3f(x_neg_max, y-radius-radius, 0));//3
+
+	
+	const int startIndex = (int)triangles.vertices.size()-3;
+	for (int i=0;i<NUM_INDICES;i++)
+    		triangles.indices.push_back(indices[i]+vec3i(startIndex));
+			
+}
+
+
 int main(int ac, char **av)
 {
-  LOG("owl::ng example '" << av[0] << "' starting up");
+  //LOG("owl::ng example '" << av[0] << "' starting up");
 
   // create a context on the first device:
   OWLContext context = owlContextCreate(nullptr,1);
   OWLModule module = owlModuleCreate(context,ptxCode);
-  
+
+
+	/////////////////////////////////////////////////////INPUTS//////////////////////////////////////////////////////
+  	std::string line;
+    std::ifstream myfile;
+    myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/input.csv");
+
+   if(!myfile.is_open()) {
+      perror("Error open");
+      exit(EXIT_FAILURE);
+   }
+   std::vector<float> vect;
+    while(getline(myfile, line)) {
+     //std::cout << line << '\n';
+    std::stringstream ss(line);
+
+    float i;
+
+    while (ss >> i)
+    {
+        vect.push_back(i);
+				//std::cout << i <<'\n';
+        if (ss.peek() == ',')
+            ss.ignore();
+    }
+    }	
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  //create triangles
+  /*createTrianglesFromSphere(0.f,0.f,1.f);
+  createTrianglesFromSphere(0.75f,2.f,1.f);
+
+  createTrianglesFromSphere(0.74f,1.f,1.f);
+  createTrianglesFromSphere(0.73f,1.f,1.f);
+
+  createTrianglesFromSphere(0.72f,1.f,1.f);
+  createTrianglesFromSphere(0.53f,1.f,1.f);
+  createTrianglesFromSphere(0.50f,1.f,1.f);
+
+  createTrianglesFromSphere(-0.5f,0.f,1.f);
+  createTrianglesFromSphere(-0.75f,3.f,1.f);
+  createTrianglesFromSphere(-0.74f,0.f,1.f);
+  createTrianglesFromSphere(-0.73f,3.f,1.f);
+
+  createTrianglesFromSphere(1.f,1.f,1.f);
+  createTrianglesFromSphere(1.1f,1.f,1.f);
+  createTrianglesFromSphere(1.12f,1.f,1.f);*/
+
+  //Select ray origin
+  vec3f rayOrigin = vec3f(1,2, -1.f);
+	float radius = 1724461.f;
+
+	//Create triangles
+	for(int i = 0; i < vect.size(); i+=2)
+		 createTrianglesFromSphere(vect.at(i),vect.at(i+1),radius);
+	triangles.radius.push_back(vec3f(radius,0,0));
+
+
+
   // ##################################################################
   // set up all the *GEOMETRY* graph we want to render
   // ##################################################################
@@ -85,44 +178,60 @@ int main(int ac, char **av)
   OWLVarDecl trianglesGeomVars[] = {
     { "index",  OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,index)},
     { "vertex", OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,vertex)},
-    { "color",  OWL_FLOAT3, OWL_OFFSETOF(TrianglesGeomData,color)}
+    { "circle",  OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,circle)},
+		{ "radius", OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,radius)}
   };
   OWLGeomType trianglesGeomType
     = owlGeomTypeCreate(context,
                         OWL_TRIANGLES,
                         sizeof(TrianglesGeomData),
-                        trianglesGeomVars,3);
-  owlGeomTypeSetClosestHit(trianglesGeomType,0,
-                           module,"TriangleMesh");
+                        trianglesGeomVars,4);
+  /*owlGeomTypeSetClosestHit(trianglesGeomType,0,
+                           module,"TriangleMesh");*/
+  owlGeomTypeSetAnyHit(trianglesGeomType,0, module,"tmesh");
 
   // ##################################################################
   // set up all the *GEOMS* we want to run that code on
   // ##################################################################
 
-  LOG("building geometries ...");
+  //LOG("building geometries ...");
 
   // ------------------------------------------------------------------
   // triangle mesh
   // ------------------------------------------------------------------
   OWLBuffer vertexBuffer
-    = owlDeviceBufferCreate(context,OWL_FLOAT3,NUM_VERTICES,vertices);
+    = owlDeviceBufferCreate(context,OWL_FLOAT3,triangles.vertices.size(),triangles.vertices.data());
+
   OWLBuffer indexBuffer
-    = owlDeviceBufferCreate(context,OWL_INT3,NUM_INDICES,indices);
+    = owlDeviceBufferCreate(context,OWL_INT3,triangles.indices.size(),triangles.indices.data());
+
+  OWLBuffer circleBuffer
+    = owlDeviceBufferCreate(context,OWL_FLOAT3,triangles.circles.size(),triangles.circles.data());
+
+  OWLBuffer radiusBuffer
+    = owlDeviceBufferCreate(context,OWL_FLOAT3,triangles.radius.size(),triangles.radius.data());
+
   OWLBuffer frameBuffer
-    = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x*fbSize.y);
+    = owlHostPinnedBufferCreate(context,OWL_INT,vect.size()/3);
+
+
 
   OWLGeom trianglesGeom
     = owlGeomCreate(context,trianglesGeomType);
   
+  //LOG("No of vertices = " << triangles.vertices.size());
   owlTrianglesSetVertices(trianglesGeom,vertexBuffer,
-                          NUM_VERTICES,sizeof(vec3f),0);
+                          triangles.vertices.size(),sizeof(triangles.vertices[0]),0);
   owlTrianglesSetIndices(trianglesGeom,indexBuffer,
-                         NUM_INDICES,sizeof(vec3i),0);
+                         triangles.indices.size(),sizeof(triangles.indices[0]),0);
+
+  //for(int i = 0; i < triangles.indices.size(); i++)
+  	//printf("index from createTriangle = %d,%d,%d \n",triangles.indices.at(i).x,triangles.indices.at(i).y,triangles.indices.at(i).z );
   
   owlGeomSetBuffer(trianglesGeom,"vertex",vertexBuffer);
   owlGeomSetBuffer(trianglesGeom,"index",indexBuffer);
-  owlGeomSet3f(trianglesGeom,"color",owl3f{0,1,0});
-  
+  owlGeomSetBuffer(trianglesGeom,"circle",circleBuffer);
+  owlGeomSetBuffer(trianglesGeom,"radius",radiusBuffer);  
   // ------------------------------------------------------------------
   // the group/accel for that mesh
   // ------------------------------------------------------------------
@@ -163,6 +272,8 @@ int main(int ac, char **av)
     { "fbPtr",         OWL_BUFPTR, OWL_OFFSETOF(RayGenData,fbPtr)},
     { "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
     { "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
+
+    { "origin",				 OWL_FLOAT3, OWL_OFFSETOF(RayGenData,origin)},	
     { "camera.pos",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.pos)},
     { "camera.dir_00", OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.dir_00)},
     { "camera.dir_du", OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.dir_du)},
@@ -192,6 +303,8 @@ int main(int ac, char **av)
   owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
   owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
   owlRayGenSetGroup (rayGen,"world",        world);
+
+  owlRayGenSet3f    (rayGen,"origin",   		(const owl3f&)rayOrigin);
   owlRayGenSet3f    (rayGen,"camera.pos",   (const owl3f&)camera_pos);
   owlRayGenSet3f    (rayGen,"camera.dir_00",(const owl3f&)camera_d00);
   owlRayGenSet3f    (rayGen,"camera.dir_du",(const owl3f&)camera_ddu);
@@ -208,23 +321,43 @@ int main(int ac, char **av)
   // now that everything is ready: launch it ....
   // ##################################################################
   
-  LOG("launching ...");
+  //LOG("launching ...");
+
+	auto start = std::chrono::steady_clock::now();
   owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
-  
-  LOG("done with launch, writing picture ...");
+	auto end = std::chrono::steady_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
+
+  // ##################################################################
+  // Write to file
+  // ##################################################################
+	std::ofstream ofile;
+	ofile.open("/home/min/a/nagara16/Downloads/owl/build/tri_op.txt", std::ios::out);
+  //LOG("done with launch, writing picture ...");
   // for host pinned mem it doesn't matter which device we query...
   const uint32_t *fb
     = (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
-  assert(fb);
-  stbi_write_png(outFileName,fbSize.x,fbSize.y,4,
-                 fb,fbSize.x*sizeof(uint32_t));
-  LOG_OK("written rendered frame buffer to file "<<outFileName);
+
+	for(int i = 0; i < triangles.vertices.size()/3; i++)
+	{
+		if(fb[i] == 1)
+		{
+			//printf("point %d\n",i);
+			ofile << i << std::endl;
+		}	
+	}
+	ofile.close();
+
+  
+  //LOG_OK("written rendered frame buffer to file "<<outFileName);
+
   // ##################################################################
   // and finally, clean up
   // ##################################################################
   
-  LOG("destroying devicegroup ...");
+  //LOG("destroying devicegroup ...");
   owlContextDestroy(context);
   
-  LOG_OK("seems all went OK; app is done, this should be the last output ...");
+  //LOG_OK("seems all went OK; app is done, this should be the last output ...");
 }

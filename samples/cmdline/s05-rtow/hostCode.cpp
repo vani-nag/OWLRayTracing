@@ -24,8 +24,14 @@
 // external helper stuff for image output
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
-
+#include <vector>
+#include<iostream>
+#include<fstream>
+#include<string>
+#include<sstream>
 #include <random>
+#include<ctime>
+#include<chrono>
 
 #define LOG(message)                                            \
   std::cout << OWL_TERMINAL_BLUE;                               \
@@ -39,74 +45,103 @@
 extern "C" char ptxCode[];
 
 const char *outFileName = "s05-rtow.png";
-const vec2i fbSize(1600,800);
+//const vec2i fbSize(1600,800);
+const vec2i fbSize(1,1);
 const vec3f lookFrom(13, 2, 3);
+//const vec3f lookFrom(-2.f,1.f,1.f);
 const vec3f lookAt(0, 0, 0);
+
 const vec3f lookUp(0.f,1.f,0.f);
 const float fovy = 20.f;
 
-std::vector<DielectricSphere> dielectricSpheres;
-std::vector<LambertianSphere> lambertianSpheres;
-std::vector<MetalSphere>      metalSpheres;
+std::vector<Sphere> Spheres;
 
-inline float rnd()
+
+/*void createScene()
 {
-  static std::mt19937 gen(0); //Standard mersenne_twister_engine seeded with rd()
-  static std::uniform_real_distribution<float> dis(0.f, 1.f);
-  return dis(gen);
-}
+	Spheres.push_back(Sphere{vec3f(0.f, 0.0f, 0.f), 1.f, 0});
+	  
+	Spheres.push_back(Sphere{vec3f(0.74f, 1.f, 0.f), 1.f, 1});
 
-inline vec3f rnd3f() { return vec3f(rnd(),rnd(),rnd()); }
+	Spheres.push_back(Sphere{vec3f(0.73f, 1.f, 0.f), 1.f, 2});
 
-void createScene()
-{
-  lambertianSpheres.push_back({Sphere{vec3f(0.f, -1000.0f, -1.f), 1000.f},
-        Lambertian{vec3f(0.5f, 0.5f, 0.5f)}});
-  
-  for (int a = -11; a < 11; a++) {
-    for (int b = -11; b < 11; b++) {
-      float choose_mat = rnd();
-      vec3f center(a + rnd(), 0.2f, b + rnd());
-      if (choose_mat < 0.8f) 
-        lambertianSpheres.push_back({Sphere{center, 0.2f},
-              Lambertian{rnd3f()*rnd3f()}});
-      else if (choose_mat < 0.95f) 
-        metalSpheres.push_back({Sphere{center, 0.2f},
-              Metal{0.5f*(1.f+rnd3f()),0.5f*rnd()}});
-      else 
-        dielectricSpheres.push_back({Sphere{center, 0.2f},
-              Dielectric{1.5f}});
-    }
-  }
-  dielectricSpheres.push_back({Sphere{vec3f(0.f, 1.f, 0.f), 1.f},
-        Dielectric{1.5f}});
-  lambertianSpheres.push_back({Sphere{vec3f(-4.f,1.f, 0.f), 1.f},
-        Lambertian{vec3f(0.4f, 0.2f, 0.1f)}});
-  metalSpheres.push_back({Sphere{vec3f(4.f, 1.f, 0.f), 1.f},
-        Metal{vec3f(0.7f, 0.6f, 0.5f), 0.0f}});
-}
-  
+	Spheres.push_back(Sphere{vec3f(-0.74f, 1.f, 0.f), 1.f, 3});
+}*/
+
 int main(int ac, char **av)
 {
   // ##################################################################
   // pre-owl host-side set-up
   // ##################################################################
 
-  LOG("owl example '" << av[0] << "' starting up");
+ 		std::string line;
+    std::ifstream myfile;
+    myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/input.csv");
+		
+   if(!myfile.is_open()) {
+      perror("Error open");
+      exit(EXIT_FAILURE);
+   }
+   std::vector<float> vect;
+    while(getline(myfile, line)) 
+		{
+		   //std::cout << line << '\n';
+		  std::stringstream ss(line);
 
-  LOG("creating the scene ...");
-  createScene();
-  LOG_OK("created scene:");
-  LOG_OK(" num lambertian spheres: " << lambertianSpheres.size());
-  LOG_OK(" num dielectric spheres: " << dielectricSpheres.size());
-  LOG_OK(" num metal spheres     : " << metalSpheres.size());
-  
+		  float i;
+
+		  while (ss >> i)
+		  {
+		      vect.push_back(i);
+					//std::cout << i <<'\n';
+		      if (ss.peek() == ',')
+		          ss.ignore();
+		  }
+   }	
+
+
+  // ##################################################################
+  // Create scene
+  // ##################################################################
+
+	//Select minPts,epsilon
+	float radius = 1.f;
+	int minPts = 3;
+	int c = 0;
+
+	for(int i = 0; i < vect.size(); i+=3)
+	{
+		Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2)),radius,c,0});
+		c++;
+	}
+
+
+	//createScene();
+  //LOG_OK("created scene:");
+  //LOG_OK(" num spheres: " << Spheres.size());
+
+
   // ##################################################################
   // init owl
   // ##################################################################
 
   OWLContext context = owlContextCreate(nullptr,1);
   OWLModule  module  = owlModuleCreate(context,ptxCode);
+
+
+  // ##################################################################
+  // Params
+  // ##################################################################
+
+  OWLVarDecl paramVars[] = {
+    { "indices",  OWL_BUFPTR, OWL_OFFSETOF(param,indices)},
+    { /* sentinel to mark end of list */ }
+  };
+  OWLBuffer lp
+    = owlDeviceBufferCreate(context,OWL_USER_TYPE(param),
+                            sizeof(param),0);
+	//OWLParams  lp = owlParamsCreate(context,sizeof(param),paramVars,-1);
+	
   
   // ##################################################################
   // set up all the *GEOMETRY* graph we want to render
@@ -117,55 +152,24 @@ int main(int ac, char **av)
   // -------------------------------------------------------
 
   // ----------- metal -----------
-  OWLVarDecl metalSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(MetalSpheresGeom,prims)},
+  OWLVarDecl SpheresGeomVars[] = {
+    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom,prims)},
     { /* sentinel to mark end of list */ }
   };
-  OWLGeomType metalSpheresGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_USER,
-                        sizeof(MetalSpheresGeom),
-                        metalSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(metalSpheresGeomType,0,
-                           module,"MetalSpheres");
-  owlGeomTypeSetIntersectProg(metalSpheresGeomType,0,
-                              module,"MetalSpheres");
-  owlGeomTypeSetBoundsProg(metalSpheresGeomType,
-                           module,"MetalSpheres");
 
-  // ----------- dielectric -----------
-  OWLVarDecl dielectricSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(DielectricSpheresGeom,prims)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType dielectricSpheresGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_USER,
-                        sizeof(DielectricSpheresGeom),
-                        dielectricSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(dielectricSpheresGeomType,0,
-                           module,"DielectricSpheres");
-  owlGeomTypeSetIntersectProg(dielectricSpheresGeomType,0,
-                              module,"DielectricSpheres");
-  owlGeomTypeSetBoundsProg(dielectricSpheresGeomType,
-                           module,"DielectricSpheres");
 
-  // ----------- lambertian -----------
-  OWLVarDecl lambertianSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(LambertianSpheresGeom,prims)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType lambertianSpheresGeomType
+  OWLGeomType SpheresGeomType
     = owlGeomTypeCreate(context,
                         OWL_GEOMETRY_USER,
-                        sizeof(LambertianSpheresGeom),
-                        lambertianSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(lambertianSpheresGeomType,0,
-                           module,"LambertianSpheres");
-  owlGeomTypeSetIntersectProg(lambertianSpheresGeomType,0,
-                              module,"LambertianSpheres");
-  owlGeomTypeSetBoundsProg(lambertianSpheresGeomType,
-                           module,"LambertianSpheres");
+                        sizeof(SpheresGeom),
+                        SpheresGeomVars,-1);
+  /*owlGeomTypeSetClosestHit(SpheresGeomType,0,
+                           module,"Spheres");*/
+  owlGeomTypeSetIntersectProg(SpheresGeomType,0,
+                              module,"Spheres");
+  owlGeomTypeSetBoundsProg(SpheresGeomType,
+                           module,"Spheres");
+
   // make sure to do that *before* setting up the geometry, since the
   // user geometry group will need the compiled bounds programs upon
   // accelBuild()
@@ -175,50 +179,32 @@ int main(int ac, char **av)
   // set up all the *GEOMS* we want to run that code on
   // ##################################################################
 
-  LOG("building geometries ...");
+  //LOG("building geometries ...");
 
   OWLBuffer frameBuffer
-    = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x*fbSize.y);
+    = owlHostPinnedBufferCreate(context,OWL_INT,vect.size());
 
-  // ----------- metal -----------
-  OWLBuffer metalSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(metalSpheres[0]),
-                            metalSpheres.size(),metalSpheres.data());
-  OWLGeom metalSpheresGeom
-    = owlGeomCreate(context,metalSpheresGeomType);
-  owlGeomSetPrimCount(metalSpheresGeom,metalSpheres.size());
-  owlGeomSetBuffer(metalSpheresGeom,"prims",metalSpheresBuffer);
+ 
+  OWLBuffer SpheresBuffer
+    = owlDeviceBufferCreate(context,OWL_USER_TYPE(Spheres[0]),
+                            Spheres.size(),Spheres.data());
+  OWLGeom SpheresGeom
+    = owlGeomCreate(context,SpheresGeomType);
+  owlGeomSetPrimCount(SpheresGeom,Spheres.size());
+  owlGeomSetBuffer(SpheresGeom,"prims",SpheresBuffer);
 
-  // ----------- lambertian -----------
-  OWLBuffer lambertianSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(lambertianSpheres[0]),
-                            lambertianSpheres.size(),lambertianSpheres.data());
-  OWLGeom lambertianSpheresGeom
-    = owlGeomCreate(context,lambertianSpheresGeomType);
-  owlGeomSetPrimCount(lambertianSpheresGeom,lambertianSpheres.size());
-  owlGeomSetBuffer(lambertianSpheresGeom,"prims",lambertianSpheresBuffer);
-
-  // ----------- dielectric -----------
-  OWLBuffer dielectricSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(dielectricSpheres[0]),
-                            dielectricSpheres.size(),dielectricSpheres.data());
-  OWLGeom dielectricSpheresGeom
-    = owlGeomCreate(context,dielectricSpheresGeomType);
-  owlGeomSetPrimCount(dielectricSpheresGeom,dielectricSpheres.size());
-  owlGeomSetBuffer(dielectricSpheresGeom,"prims",dielectricSpheresBuffer);
+ 
 
   // ##################################################################
   // set up all *ACCELS* we need to trace into those groups
   // ##################################################################
-  
+    //LOG("building accels ...");
   OWLGeom  userGeoms[] = {
-    lambertianSpheresGeom,
-    metalSpheresGeom,
-    dielectricSpheresGeom
+    SpheresGeom
   };
 
   OWLGroup spheresGroup
-    = owlUserGeomGroupCreate(context,3,userGeoms);
+    = owlUserGeomGroupCreate(context,1,userGeoms);
   owlGroupBuildAccel(spheresGroup);
   
   OWLGroup world
@@ -244,83 +230,135 @@ int main(int ac, char **av)
   // ........... set variables  ............................
   /* nothing to set */
 
-  // -------------------------------------------------------
-  // set up ray gen program
-  // -------------------------------------------------------
-  OWLVarDecl rayGenVars[] = {
-    { "fbPtr",         OWL_BUFPTR, OWL_OFFSETOF(RayGenData,fbPtr)},
-    { "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
-    { "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
-    { "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
-    { "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
-    { "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
-    { "camera.vert",   OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.vertical)},
-    { /* sentinel to mark end of list */ }
-  };
+	// -------------------------------------------------------
+	// set up ray gen program
+	// -------------------------------------------------------
+	OWLVarDecl rayGenVars[] = {
+		{ "fbPtr",         OWL_BUFPTR, OWL_OFFSETOF(RayGenData,fbPtr)},
+		{ "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
+		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
+		{ "origin",				 OWL_FLOAT3, OWL_OFFSETOF(RayGenData,origin)},	
+		{ "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
+		{ "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
+		{ "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
+		{ "camera.vert",   OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.vertical)},
+		{ /* sentinel to mark end of list */ }
+	};
 
-  // ........... create object  ............................
-  OWLRayGen rayGen
-    = owlRayGenCreate(context,module,"rayGen",
-                      sizeof(RayGenData),
-                      rayGenVars,-1);
+	// ........... create object  ............................
+	OWLRayGen rayGen
+		= owlRayGenCreate(context,module,"rayGen",
+		                  sizeof(RayGenData),
+		                  rayGenVars,-1);
 
-  // ........... compute variable values  ..................
-  const float vfov = fovy;
-  const vec3f vup = lookUp;
-  const float aspect = fbSize.x / float(fbSize.y);
-  const float theta = vfov * ((float)M_PI) / 180.0f;
-  const float half_height = tanf(theta / 2.0f);
-  const float half_width = aspect * half_height;
-  const float focusDist = 10.f;
-  const vec3f origin = lookFrom;
-  const vec3f w = normalize(lookFrom - lookAt);
-  const vec3f u = normalize(cross(vup, w));
-  const vec3f v = cross(w, u);
-  const vec3f lower_left_corner
-    = origin - half_width * focusDist*u - half_height * focusDist*v - focusDist * w;
-  const vec3f horizontal = 2.0f*half_width*focusDist*u;
-  const vec3f vertical = 2.0f*half_height*focusDist*v;
+	// ........... compute variable values  ..................
+	const float vfov = fovy;
+	const vec3f vup = lookUp;
+	const float aspect = fbSize.x / float(fbSize.y);
+	const float theta = vfov * ((float)M_PI) / 180.0f;
+	const float half_height = tanf(theta / 2.0f);
+	const float half_width = aspect * half_height;
+	const float focusDist = 10.f;
+	const vec3f origin = lookFrom;
+	const vec3f w = normalize(lookFrom - lookAt);
+	const vec3f u = normalize(cross(vup, w));
+	const vec3f v = cross(w, u);
+	const vec3f lower_left_corner
+		= origin - half_width * focusDist*u - half_height * focusDist*v - focusDist * w;
+	const vec3f horizontal = 2.0f*half_width*focusDist*u;
+	const vec3f vertical = 2.0f*half_height*focusDist*v;
 
-  // ----------- set variables  ----------------------------
-  owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
-  owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
-  owlRayGenSetGroup (rayGen,"world",        world);
-  owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
-  owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
-  owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
-  owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
-  
+	int cluster_number = 0, flag = 0;
+	std::ofstream ofile;
+	//ofile.open("/home/min/a/nagara16/Downloads/owl/build/cir_op.txt", std::ios::out);
+	auto start = std::chrono::steady_clock::now();
   // ##################################################################
-  // build *SBT* required to trace the groups
+  // Start LOOP Here????
   // ##################################################################
+	for (auto it = Spheres.begin(); it != Spheres.end(); ++it)
+	{
+			cout<<"Status = "<<it->status<<'\n';
+			if(it -> status == 0)
+			{
+				//Select ray origin
+				vec3f rayOrigin = it -> center;
+				cout<<"Spheres: "<<"\t\n";
+				for(int i = 0; i < Spheres.size(); i++)
+					cout<<Spheres.at(i).center.x<<", "<<Spheres.at(i).center.y<<", "<<Spheres.at(i).center.z<<'\n';
+				//cout<<" \tOrigin: "<<rayOrigin.x<<", "<<rayOrigin.y<<", "<<rayOrigin.z<<'\n';
 
-  // programs have been built before, but have to rebuild raygen and
-  // miss progs
-  owlBuildPrograms(context);
-  owlBuildPipeline(context);
-  owlBuildSBT(context);
 
-  // ##################################################################
-  // now that everything is ready: launch it ....
-  // ##################################################################
-  
-  LOG("launching ...");
-  owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
-  
-  LOG("done with launch, writing picture ...");
-  // for host pinned mem it doesn't matter which device we query...
-  const uint32_t *fb
-    = (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
-  stbi_write_png(outFileName,fbSize.x,fbSize.y,4,
-                 fb,fbSize.x*sizeof(uint32_t));
-  LOG_OK("written rendered frame buffer to file "<<outFileName);
+				// ----------- set variables  ----------------------------
+				owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
+				owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
+				owlRayGenSetGroup (rayGen,"world",        world);
+				owlRayGenSet3f    (rayGen,"origin",   		(const owl3f&)rayOrigin);
+				owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
+				owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
+				owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
+				owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
+				
+				// ##################################################################
+				// build *SBT* required to trace the groups
+				// ##################################################################
+
+				// programs have been built before, but have to rebuild raygen and
+				// miss progs
+				owlBuildPrograms(context);
+				owlBuildPipeline(context);
+				owlBuildSBT(context);
+
+				// ##################################################################
+				// now that everything is ready: launch it ....
+				// ##################################################################
+				
+				//LOG("launching ...");
+
+				owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
+
+				// ##################################################################
+				// Write to file
+				// ##################################################################  
+				
+				ofile.open("/home/min/a/nagara16/Downloads/owl/build/cir_op.txt", std::ios::app);
+				const uint32_t *fb
+					= (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
+
+					flag = 0;
+					for (auto i = Spheres.begin(); i != Spheres.end(); ++i)
+					{
+				    if (fb[i -> index] == 1) 
+						{
+								ofile << i->index << "," << cluster_number << std::endl;
+								cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
+				        Spheres.erase(i);
+				        i--;
+								flag = 1;
+		      	}
+					}
+
+				ofile.close();
+				
+				//Not core point ==> status = 1 
+				if(flag == 0)
+					it -> status = 1;
+				else
+					cluster_number++;
+				it--;
+		}
+
+	}
+
 
   // ##################################################################
   // and finally, clean up
   // ##################################################################
+	auto end = std::chrono::steady_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
   
-  LOG("destroying devicegroup ...");
+	//LOG("destroying devicegroup ...");
   owlContextDestroy(context);
-  
-  LOG_OK("seems all went OK; app is done, this should be the last output ...");
+
+  //LOG_OK("seems all went OK; app is done, this should be the last output ...");
 }

@@ -156,6 +156,7 @@ void closestHitBoxes()
 
   // ID of the triangle we've hit:
   const int primID = optixGetPrimitiveIndex();
+  printf("CLOSEST hit %d\n\t vertex x %f y %f z %f\n",primID,self.vertex[primID].x, self.vertex[primID].y, self.vertex[primID].z);
 
   // there's 12 tris per box:
   const int materialID = primID / 12;

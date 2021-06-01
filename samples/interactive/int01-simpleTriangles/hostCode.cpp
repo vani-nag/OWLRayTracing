@@ -35,29 +35,7 @@
 
 extern "C" char ptxCode[];
 
-const int NUM_VERTICES = 8;
-vec3f vertices[NUM_VERTICES] =
-  {
-    { -1.f,-1.f,-1.f },
-    { +1.f,-1.f,-1.f },
-    { -1.f,+1.f,-1.f },
-    { +1.f,+1.f,-1.f },
-    { -1.f,-1.f,+1.f },
-    { +1.f,-1.f,+1.f },
-    { -1.f,+1.f,+1.f },
-    { +1.f,+1.f,+1.f }
-  };
 
-const int NUM_INDICES = 12;
-vec3i indices[NUM_INDICES] =
-  {
-    { 0,1,3 }, { 2,3,0 },
-    { 5,7,6 }, { 5,6,4 },
-    { 0,4,5 }, { 0,5,1 },
-    { 2,3,7 }, { 2,7,6 },
-    { 1,5,7 }, { 1,7,3 },
-    { 4,0,2 }, { 4,2,6 }
-  };
 
 // const vec2i fbSize(800,600);
 const vec3f init_lookFrom(-4.f,+3.f,-2.f);

@@ -16,53 +16,78 @@
 
 #include "deviceCode.h"
 #include <optix_device.h>
+#include <owl/common/math/AffineSpace.h>
+#include <owl/common/math/random.h>
+#define ind 500000
+#include<math.h>
+__device__ int a[ind];
 
 OPTIX_RAYGEN_PROGRAM(simpleRayGen)()
 {
   const RayGenData &self = owl::getProgramData<RayGenData>();
   const vec2i pixelID = owl::getLaunchIndex();
-  if (pixelID == owl::vec2i(0)) {
-    printf("%sHello OptiX From your First RayGen Program%s\n",
-           OWL_TERMINAL_CYAN,
-           OWL_TERMINAL_DEFAULT);
-  }
+
 
   const vec2f screen = (vec2f(pixelID)+vec2f(.5f)) / vec2f(self.fbSize);
-  owl::Ray ray;
+  vec3f origin = self.origin;
+  /*owl::Ray ray;
   ray.origin    
     = self.camera.pos;
-  ray.direction 
-    = normalize(self.camera.dir_00
-                + screen.u * self.camera.dir_du
-                + screen.v * self.camera.dir_dv);
+  //printf("Origin (%f, %f, %f)\n",ray.origin.x,ray.origin.y,ray.origin.z);
+  ray.direction = normalize(self.camera.dir_00+ screen.u * self.camera.dir_du+ screen.v * self.camera.dir_dv);
+  //ray.direction = vec3f(0,0,-1);*/
 
-  vec3f color;
-  owl::traceRay(/*accel to trace against*/self.world,
-                /*the ray to trace*/ray,
-                /*prd*/color);
+	
+    owl::Ray ray(/* origin   : */ origin,
+			vec3f(0,0,1),
+                     //normalize(self.camera.dir_00+ screen.u * self.camera.dir_du+ screen.v * self.camera.dir_dv),
+                     /* tmin     : */ 0,
+                     /* tmax     : */ 2);
     
-  const int fbOfs = pixelID.x+self.fbSize.x*pixelID.y;
-  self.fbPtr[fbOfs]
-    = owl::make_rgba(color);
+  
+  //printf("Origin (%f, %f, %f)\n",ray.origin.x,ray.origin.y,ray.origin.z);
+  vec3f color;
+  owl::traceRay(self.world,
+                ray,
+                color);
+    
+  	for(int i = 0; i < ind; i++)
+  		self.fbPtr[i] = a[i];
 }
 
-OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
+
+/////////////////////////////////////////ANY HIT////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+OPTIX_ANY_HIT_PROGRAM(tmesh)()
 {
   vec3f &prd = owl::getPRD<vec3f>();
-
   const TrianglesGeomData &self = owl::getProgramData<TrianglesGeomData>();
-  
-  // compute normal:
   const int   primID = optixGetPrimitiveIndex();
-  const vec3i index  = self.index[primID];
-  const vec3f &A     = self.vertex[index.x];
-  const vec3f &B     = self.vertex[index.y];
-  const vec3f &C     = self.vertex[index.z];
-  const vec3f Ng     = normalize(cross(B-A,C-A));
 
-  const vec3f rayDir = optixGetWorldRayDirection();
-  prd = (.2f + .8f*fabs(dot(rayDir,Ng)))*self.color;
+  //Inside circle?
+  const vec3f org   = optixGetWorldRayOrigin();
+  float x,y;
+
+  //Get closest hit triangle's associated circle
+  x = self.circle[primID].x - org.x;
+  y = self.circle[primID].y - org.y;
+
+	//a[primID] = 1;
+  if(std::sqrt((x*x) + (y*y)) <= self.radius[0].x)
+  	a[primID] = 1;
+
+	optixIgnoreIntersection();
+
+  //printf("Hit %d\n\t circle = %f,%f,%f\n\t\t sqrt((x*x) + (y*y)) = %f\n",primID,self.circle[primID].x,self.circle[primID].y,self.circle[primID].z, std::sqrt((x*x) + (y*y)));
+  /*if( std::sqrt((x*x) + (y*y)) <= self.radius[primID].x)
+	  printf("point %f, %f, %f in circle = %f,%f\n\n",org.x, org.y, org.z, self.circle[primID].x, self.circle[primID].y);*/
+  //printf("ANY HIT: %d\n",primID);
+  //printf("radius %f\n",self.radius[primID].x);
+
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 OPTIX_MISS_PROGRAM(miss)()
 {
@@ -71,7 +96,7 @@ OPTIX_MISS_PROGRAM(miss)()
   const MissProgData &self = owl::getProgramData<MissProgData>();
   
   vec3f &prd = owl::getPRD<vec3f>();
-  int pattern = (pixelID.x / 8) ^ (pixelID.y/8);
-  prd = (pattern&1) ? self.color1 : self.color0;
+  //int pattern = (pixelID.x / 8) ^ (pixelID.y/8);
+  //prd = (pattern&1) ? self.color1 : self.color0;
 }
 

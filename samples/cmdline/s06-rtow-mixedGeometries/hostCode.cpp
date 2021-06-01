@@ -40,7 +40,7 @@
 extern "C" char ptxCode[];
 
 const char *outFileName = "s06-rtow-mixedGeometries.png";
-const vec2i fbSize(1600,800);
+const vec2i fbSize(160,80);
 const vec3f lookFrom(13, 2, 3);
 const vec3f lookAt(0, 0, 0);
 const vec3f lookUp(0.f,1.f,0.f);
@@ -95,16 +95,11 @@ void addRandomBox(BoxArray &boxes,
     {
       {-1.f, -1.f, -1.f},
       {+1.f, -1.f, -1.f},
-      {+1.f, +1.f, -1.f},
-      {-1.f, +1.f, -1.f},
-      {-1.f, +1.f, +1.f},
-      {+1.f, +1.f, +1.f},
-      {+1.f, -1.f, +1.f},
-      {-1.f, -1.f, +1.f},
+      {+1.f, +1.f, -1.f}
     };
 
-  const int NUM_INDICES = 12;
-  static const vec3i unitBoxIndices[NUM_INDICES] =
+  const int NUM_INDICES = 1;
+  /*static const vec3i unitBoxIndices[NUM_INDICES] =
     {
       {0, 2, 1}, //face front
       {0, 3, 2},
@@ -118,7 +113,10 @@ void addRandomBox(BoxArray &boxes,
       {5, 7, 6},
       {0, 6, 7}, //face bottom
       {0, 1, 6}
-    };
+    };*/
+
+	static const vec3i unitBoxIndices[NUM_INDICES] =
+    {{0,1,2}};	
 
   const vec3f U = normalize(randomPointInUnitSphere());
   owl::affine3f xfm = owl::frame(U);
@@ -139,7 +137,7 @@ void createScene()
   lambertianSpheres.push_back({Sphere{vec3f(0.f, -1000.0f, -1.f), 1000.f},
         Lambertian{vec3f(0.5f, 0.5f, 0.5f)}});
   
-  for (int a = -11; a < 11; a++) {
+  /*for (int a = -11; a < 11; a++) {
     for (int b = -11; b < 11; b++) {
       float choose_mat = rnd();
       float choose_shape = rnd();
@@ -167,11 +165,23 @@ void createScene()
                 Dielectric{1.5f}});
       }
     }
-  }
+  }*/
+  vec3f center(-11 + rnd(), 0.2f, -11 + rnd());
+  vec3f center1(-11 + rnd(), 0.2f, -10 + rnd());
+  vec3f center2(-11 + rnd(), 0.2f, -5 + rnd());
+  addRandomBox(lambertianBoxes,center,.2f,
+                       Lambertian{rnd3f()*rnd3f()});
+  addRandomBox(lambertianBoxes,center1,.2f,
+                       Lambertian{rnd3f()*rnd3f()});
+  addRandomBox(lambertianBoxes,center2,.6f,
+                       Lambertian{rnd3f()*rnd3f()});
+  addRandomBox(metalBoxes,center1,.2f,
+                       Metal{0.5f*(1.f+rnd3f()),0.5f*rnd()});
+  addRandomBox(dielectricBoxes,center2,.2f,
+                       Dielectric{1.5f});
+
   dielectricSpheres.push_back({Sphere{vec3f(0.f, 1.f, 0.f), 1.f},
         Dielectric{1.5f}});
-  lambertianSpheres.push_back({Sphere{vec3f(-4.f,1.f, 0.f), 1.f},
-        Lambertian{vec3f(0.4f, 0.2f, 0.1f)}});
   metalSpheres.push_back({Sphere{vec3f(4.f, 1.f, 0.f), 1.f},
         Metal{vec3f(0.7f, 0.6f, 0.5f), 0.0f}});
 }
@@ -438,6 +448,8 @@ int main(int ac, char **av)
   owlGeomSetBuffer(dielectricBoxesGeom,"index",dielectricIndicesBuffer);
   
 
+  for(int i = 0; i < dielectricBoxes.vertices.size(); i++)
+  	printf("index from createTriangle = %f,%f,%f \n",dielectricBoxes.vertices.at(i).x,dielectricBoxes.vertices.at(i).y,dielectricBoxes.vertices.at(i).z );
 
   // ##################################################################
   // set up all *ACCELS* we need to trace into those groups
