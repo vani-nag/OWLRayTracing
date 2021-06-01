@@ -277,74 +277,74 @@ int main(int ac, char **av)
   // ##################################################################
 	for (auto it = Spheres.begin(); it != Spheres.end(); ++it)
 	{
-			cout<<"Status = "<<it->status<<'\n';
-			if(it -> status == 0)
-			{
-				//Select ray origin
-				vec3f rayOrigin = it -> center;
-				cout<<"Spheres: "<<"\t\n";
-				for(int i = 0; i < Spheres.size(); i++)
-					cout<<Spheres.at(i).center.x<<", "<<Spheres.at(i).center.y<<", "<<Spheres.at(i).center.z<<'\n';
-				//cout<<" \tOrigin: "<<rayOrigin.x<<", "<<rayOrigin.y<<", "<<rayOrigin.z<<'\n';
+		cout<<"Status = "<<it->status<<'\n';
+		if(it -> status == 0)
+		{
+			//Select ray origin
+			vec3f rayOrigin = it -> center;
+			cout<<"Spheres: "<<"\t\n";
+			for(int i = 0; i < Spheres.size(); i++)
+				cout<<Spheres.at(i).center.x<<", "<<Spheres.at(i).center.y<<", "<<Spheres.at(i).center.z<<'\n';
+			//cout<<" \tOrigin: "<<rayOrigin.x<<", "<<rayOrigin.y<<", "<<rayOrigin.z<<'\n';
 
 
-				// ----------- set variables  ----------------------------
-				owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
-				owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
-				owlRayGenSetGroup (rayGen,"world",        world);
-				owlRayGenSet3f    (rayGen,"origin",   		(const owl3f&)rayOrigin);
-				owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
-				owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
-				owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
-				owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
-				
-				// ##################################################################
-				// build *SBT* required to trace the groups
-				// ##################################################################
+			// ----------- set variables  ----------------------------
+			owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
+			owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
+			owlRayGenSetGroup (rayGen,"world",        world);
+			owlRayGenSet3f    (rayGen,"origin",   		(const owl3f&)rayOrigin);
+			owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
+			owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
+			owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
+			owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
+			
+			// ##################################################################
+			// build *SBT* required to trace the groups
+			// ##################################################################
 
-				// programs have been built before, but have to rebuild raygen and
-				// miss progs
-				owlBuildPrograms(context);
-				owlBuildPipeline(context);
-				owlBuildSBT(context);
+			// programs have been built before, but have to rebuild raygen and
+			// miss progs
+			owlBuildPrograms(context);
+			owlBuildPipeline(context);
+			owlBuildSBT(context);
 
-				// ##################################################################
-				// now that everything is ready: launch it ....
-				// ##################################################################
-				
-				//LOG("launching ...");
+			// ##################################################################
+			// now that everything is ready: launch it ....
+			// ##################################################################
+			
+			//LOG("launching ...");
 
-				owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
+			owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
 
-				// ##################################################################
-				// Write to file
-				// ##################################################################  
-				
-				ofile.open("/home/min/a/nagara16/Downloads/owl/build/cir_op.txt", std::ios::app);
-				const uint32_t *fb
-					= (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
+			// ##################################################################
+			// Write to file
+			// ##################################################################  
+			
+			ofile.open("/home/min/a/nagara16/Downloads/owl/build/cir_op.txt", std::ios::app);
+			const uint32_t *fb
+				= (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
 
-					flag = 0;
-					for (auto i = Spheres.begin(); i != Spheres.end(); ++i)
+				flag = 0;
+				for (auto i = Spheres.begin(); i != Spheres.end(); ++i)
+				{
+					if (fb[i -> index] == 1) 
 					{
-				    if (fb[i -> index] == 1) 
-						{
-								ofile << i->index << "," << cluster_number << std::endl;
-								cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
-				        Spheres.erase(i);
-				        i--;
-								flag = 1;
-		      	}
-					}
+						ofile << i->index << "," << cluster_number << std::endl;
+						cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
+					    Spheres.erase(i);
+					    i--;
+						flag = 1;
+	      			}
+				}
 
-				ofile.close();
-				
-				//Not core point ==> status = 1 
-				if(flag == 0)
-					it -> status = 1;
-				else
-					cluster_number++;
-				it--;
+			ofile.close();
+			
+			//Not core point ==> status = 1 
+			if(flag == 0)
+				it -> status = 1;
+			else
+				cluster_number++;
+			it--;
 		}
 
 	}
