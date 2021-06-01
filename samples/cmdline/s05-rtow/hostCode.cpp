@@ -74,30 +74,28 @@ int main(int ac, char **av)
   // pre-owl host-side set-up
   // ##################################################################
 
- 		std::string line;
-    std::ifstream myfile;
-    myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/input.csv");
+	std::string line;
+  std::ifstream myfile;
+	myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/input.csv");
 		
-   if(!myfile.is_open()) {
-      perror("Error open");
-      exit(EXIT_FAILURE);
-   }
-   std::vector<float> vect;
-    while(getline(myfile, line)) 
-		{
-		   //std::cout << line << '\n';
-		  std::stringstream ss(line);
-
-		  float i;
-
-		  while (ss >> i)
-		  {
-		      vect.push_back(i);
-					//std::cout << i <<'\n';
-		      if (ss.peek() == ',')
-		          ss.ignore();
-		  }
-   }	
+  if(!myfile.is_open()) {
+    perror("Error open");
+    exit(EXIT_FAILURE);
+  }
+  std::vector<float> vect;
+  while(getline(myfile, line)) 
+	{
+	   //std::cout << line << '\n';
+	  std::stringstream ss(line);
+	  float i;
+	  while (ss >> i)
+	  {
+	      vect.push_back(i);
+				//std::cout << i <<'\n';
+	      if (ss.peek() == ',')
+	          ss.ignore();
+	  }
+	}	
 
 
   // ##################################################################
@@ -227,7 +225,7 @@ int main(int ac, char **av)
                         missProgVars,-1);
   owlMissProgSet(context,0,missProg);
   
-  // ........... set variables  ............................
+	// ........... set variables  ............................
   /* nothing to set */
 
 	// -------------------------------------------------------
@@ -248,8 +246,8 @@ int main(int ac, char **av)
 	// ........... create object  ............................
 	OWLRayGen rayGen
 		= owlRayGenCreate(context,module,"rayGen",
-		                  sizeof(RayGenData),
-		                  rayGenVars,-1);
+			                sizeof(RayGenData),
+			                rayGenVars,-1);
 
 	// ........... compute variable values  ..................
 	const float vfov = fovy;
@@ -272,9 +270,9 @@ int main(int ac, char **av)
 	std::ofstream ofile;
 	//ofile.open("/home/min/a/nagara16/Downloads/owl/build/cir_op.txt", std::ios::out);
 	auto start = std::chrono::steady_clock::now();
-  // ##################################################################
-  // Start LOOP Here????
-  // ##################################################################
+	// ##################################################################
+	// Start LOOP Here????
+	// ##################################################################
 	for (auto it = Spheres.begin(); it != Spheres.end(); ++it)
 	{
 		cout<<"Status = "<<it->status<<'\n';
@@ -334,7 +332,7 @@ int main(int ac, char **av)
 					Spheres.erase(i);
 					i--;
 					flag = 1;
-      			}
+					}
 			}
 
 			ofile.close();
