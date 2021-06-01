@@ -324,18 +324,18 @@ int main(int ac, char **av)
 			const uint32_t *fb
 				= (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
 
-				flag = 0;
-				for (auto i = Spheres.begin(); i != Spheres.end(); ++i)
+			flag = 0;
+			for (auto i = Spheres.begin(); i != Spheres.end(); ++i)
+			{
+				if (fb[i -> index] == 1) 
 				{
-					if (fb[i -> index] == 1) 
-					{
-						ofile << i->index << "," << cluster_number << std::endl;
-						cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
-					    Spheres.erase(i);
-					    i--;
-						flag = 1;
-	      			}
-				}
+					ofile << i->index << "," << cluster_number << std::endl;
+					cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
+				    Spheres.erase(i);
+				    i--;
+					flag = 1;
+      			}
+			}
 
 			ofile.close();
 			
