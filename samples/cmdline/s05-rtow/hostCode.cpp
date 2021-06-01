@@ -331,8 +331,8 @@ int main(int ac, char **av)
 				{
 					ofile << i->index << "," << cluster_number << std::endl;
 					cout<<"Erasing "<< i->index<<"\tcluster_number = "<<cluster_number<<'\n';
-				    Spheres.erase(i);
-				    i--;
+					Spheres.erase(i);
+					i--;
 					flag = 1;
       			}
 			}
