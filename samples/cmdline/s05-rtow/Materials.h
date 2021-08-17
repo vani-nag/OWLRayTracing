@@ -86,7 +86,6 @@ typedef enum {
 struct PerRayData
 {
   Random random;
-  int index[5];
   struct {
     ScatterEvent scatterEvent;
     vec3f        scattered_origin;

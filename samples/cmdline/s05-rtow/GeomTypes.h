@@ -18,12 +18,17 @@
 
 namespace owl {
 
-
-	struct TrianglesGeom
-	{
-		vec3f *vertices;
-		vec3i *indices;
+	struct Storage {
+		int *neigh;
 	};
+	
+	typedef struct DS
+	{
+		int parent;
+		int rank;
+		int isCore;
+	}DisjointSet;
+
 
   // ==================================================================
   /* the raw geometric shape of a sphere, without material - this is
@@ -31,9 +36,7 @@ namespace owl {
   // ==================================================================
   struct Sphere {
     vec3f center;
-    float radius;
-    int index;
-	int status;
+		int status;
   };
 
  
@@ -46,6 +49,7 @@ namespace owl {
 
   struct SpheresGeom {
     Sphere *prims;
+    float rad;
   };
  
 
@@ -58,7 +62,8 @@ namespace owl {
     vec2i  fbSize;
     OptixTraversableHandle world;
     int sbtOffset;
-		vec3f origin;
+    Sphere *spheres;
+    
     struct {
       vec3f origin;
       vec3f lower_left_corner;
@@ -72,9 +77,16 @@ namespace owl {
     /* nothing in this example */
   };
 
-	struct param
-	{
-	 int *indices;
+	struct MyGlobals 
+	{	
+		//Sphere *spheres;	
+		//int *frameBuffer;
+		//DisjointSet *ds;
+		DisjointSet *frameBuffer;
+		int callNum;
+		int minPts;
+		//Sphere *frameBuffer;
+		//int **frameBuffer;
 	};
 
 }

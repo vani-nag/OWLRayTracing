@@ -16,26 +16,90 @@
 
 #include "GeomTypes.h"
 #include <optix_device.h>
-#define ind 500000
+#include</home/min/a/nagara16/Downloads/owl/owl/include/owl/common/parallel/parallel_for.h>
+#define ind 5000
+#define radius 2
 using namespace owl;
 #define NUM_SAMPLES_PER_PIXEL 16
-__device__ int a[ind];
+__device__ int a[ind],b[ind];
+__device__ int lock = 0;
+__device__ int cluster_num = 0;
+
+__device__ DisjointSet ds;
+__constant__ MyGlobals optixLaunchParams;
+
+
+////////////////////////////////////////////////////////////////DISJOINT SET/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+__device__ int find(int x)
+{
+	while (optixLaunchParams.frameBuffer[x].parent != x) 
+	{
+		optixLaunchParams.frameBuffer[x].parent = optixLaunchParams.frameBuffer[optixLaunchParams.frameBuffer[x].parent].parent;
+		x = optixLaunchParams.frameBuffer[x].parent;
+	}
+
+	//printf("Leaving find()\n");
+	return 	x;
+}
+
+/*__device__ void Union(int x, int y)
+{
+	// Find current sets of x and y
+	int xset = find(x);
+	int yset = find(y);
+
+	// If they are already in same set
+	if (xset == yset)
+		return;
+
+	// Put smaller ranked item under
+	// bigger ranked item if ranks are
+	// different
+	if (optixLaunchParams.frameBuffer[xset].rank < optixLaunchParams.frameBuffer[yset].rank) 
+	{
+		optixLaunchParams.frameBuffer[xset].parent = yset;
+	}
+	else if (optixLaunchParams.frameBuffer[xset].rank > optixLaunchParams.frameBuffer[yset].rank) 
+	{
+		optixLaunchParams.frameBuffer[yset].parent = xset;
+	}
+
+	// If ranks are same, then increment
+	// rank.
+	else {
+		optixLaunchParams.frameBuffer[yset].parent = xset;
+		optixLaunchParams.frameBuffer[xset].rank = optixLaunchParams.frameBuffer[xset].rank + 1;
+	}
+	//printf("After union: parent[%d] = %d, parent[%d] = %d\n",x, optixLaunchParams.frameBuffer[xset].parent, y, optixLaunchParams.frameBuffer[yset].parent);
+}
+*/
+
+
+////////////////////////////////////////////////////////////////CODE BEGINS//////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // ==================================================================
 // bounding box programs - since these don't actually use the material
 // they're all the same irrespective of geometry type, so use a
 // template ...
 // ==================================================================
-
 template<typename SphereGeomType>
 inline __device__ void boundsProg(const void *geomData,
                                   box3f &primBounds,
                                   const int primID)
 {   
-	  const SphereGeomType &self = *(const SphereGeomType*)geomData;
-	  const Sphere sphere = self.prims[primID];
-	  primBounds = box3f()
-	    .extend(sphere.center - sphere.radius)
-	    .extend(sphere.center + sphere.radius);	
+  const SphereGeomType &self = *(const SphereGeomType*)geomData;
+	//printf("Radius = %f\n",self.rad);
+  const Sphere sphere = self.prims[primID];
+  primBounds = box3f()
+    .extend(sphere.center - self.rad)
+    .extend(sphere.center + self.rad);	
+
 }
 
 
@@ -46,34 +110,92 @@ OPTIX_BOUNDS_PROGRAM(Spheres)(const void  *geomData,
 { boundsProg<SpheresGeom>(geomData,primBounds,primID); }
 
 
+
+// ==================================================================
+// SAXPY
+// ==================================================================
+__global__ void saxpy(int n, float a, int *x, int *y)
+{
+  int i = blockIdx.x*blockDim.x + threadIdx.x;
+  if (i < n) y[i] = a*x[i] + y[i];
+}
+
+
 // ==================================================================
 // intersect programs - still all the same, since they don't use the
 // material, either
 // ==================================================================
 OPTIX_INTERSECT_PROGRAM(Spheres)()
 { 
-	 
 	const int primID = optixGetPrimitiveIndex();
+	int xID = optixGetLaunchIndex().x;
   const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
   Sphere self = selfs.prims[primID];
-
+  
   //Inside circle?
-  const vec3f org   = optixGetWorldRayOrigin();
+  const vec3f org = optixGetWorldRayOrigin();
   float x,y,z;
   
   //Get closest hit triangle's associated circle
   x = self.center.x - org.x;
   y = self.center.y - org.y;
 	z = self.center.z - org.z;
-  
-	//a[self.index] = 1;
-  if(std::sqrt((x*x) + (y*y) + (z*z)) <= self.radius)
-  	a[self.index] = 1;
-  	
-	  //printf("point %f, %f, %f in circle = %f,%f\n\n",org.x, org.y, org.z, self.center.x, self.center.y);
-  //printf("optix's primitiveID: %d\n", self.index); 
-    printf("Hit %d\n\t circle = %f,%f,%f\n\t\t sqrt((x*x) + (y*y) + (z*z)) = %f\n",primID,self.center.x,self.center.y,self.center.z, std::sqrt((x*x) + (y*y) + (z*z)));
-  
+	
+	//printf("callNum = %d\n",optixLaunchParams.callNum);
+	
+	if(std::sqrt((x*x) + (y*y) + (z*z)) <= selfs.rad)
+	{
+		if(optixLaunchParams.callNum == 1)		
+		{
+			//printf("[%d] hits %d at %f\n",optixGetLaunchIndex().x, primID, std::sqrt((x*x) + (y*y) + (z*z)));
+			optixLaunchParams.frameBuffer[xID].isCore = optixLaunchParams.frameBuffer[xID].isCore + 1;
+		}
+		
+		
+///////////////////////////////////////////////////////////CALL-2////////////////////////////////////////////////////////////////
+	
+	
+		if(optixLaunchParams.callNum == 2)
+		{
+			if(optixLaunchParams.frameBuffer[xID].isCore == 1)
+			{
+				int xset = find(xID);
+				if(optixLaunchParams.frameBuffer[primID].isCore == 1)
+				{
+						int yset = find(primID), xrank = optixLaunchParams.frameBuffer[xset].rank, yrank = optixLaunchParams.frameBuffer[yset].rank;
+						//printf("Before: CORE %d hits %d:\n  parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, primID, find(primID));
+						if (xset != yset)
+						{
+							if (xrank < yrank) 
+								optixLaunchParams.frameBuffer[xset].parent = yset;
+							else if (xrank > yrank) 
+								optixLaunchParams.frameBuffer[yset].parent = xset;
+							else 
+							{
+								optixLaunchParams.frameBuffer[yset].parent = xset;
+								optixLaunchParams.frameBuffer[xset].rank = xrank + 1;
+							}
+						}
+					//printf("After: CORE %d hits %d:\n  parent[%d] = %d \n\n", optixGetLaunchIndex().x, primID, primID, find(primID));
+				}
+					
+					
+				//////////////////////////////////////Critical section//////////////////////////////////////////////////////////////////
+				else
+				{
+					//__syncthreads();
+					//lock();
+					//Union(x,y);
+					//unlock();
+					//printf("CAS for %d:\n Before: parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, find(primID));
+					//atomicCAS(&(optixLaunchParams.frameBuffer[primID].parent), find(primID), find(optixGetLaunchIndex().x)); 
+					
+					atomicCAS(&(optixLaunchParams.frameBuffer[primID].parent), primID, xset);
+					//printf("CAS for %d: \n After: parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, find(primID));
+				}
+			}				
+		}
+	}  
 }
 
 
@@ -82,41 +204,6 @@ inline __device__ vec3f pointToWorld(const vec3f &P)
 {
   return (vec3f)optixTransformPointFromObjectToWorldSpace(P);
 }
-
-// ==================================================================
-// plumbing for closest hit
-// ==================================================================
-
-
-
-OPTIX_CLOSEST_HIT_PROGRAM(Spheres)()
-{ 
-  const int primID = optixGetPrimitiveIndex();
-	    printf("came hit\n");
-  const auto &self
-    = owl::getProgramData<SpheresGeom>().prims[primID];
-  //printf("Closest hit index from Primitive %d\n",self.index);
-  PerRayData &prd = owl::getPRD<PerRayData>();
-
-  const vec3f org  = optixGetWorldRayOrigin();
-  const vec3f dir  = optixGetWorldRayDirection();
-  const float hit_t = optixGetRayTmax();
-  const vec3f hit_P = org + hit_t * dir;
-  /* iw, jan 11, 2020: for this particular example (where we do not
-     yet use instancing) we could also get away with just using the
-     sphere.center value directly (since we don't use instancing the
-     transform will not have any effect, anyway); but this version is
-     cleaner since it would/will also work with instancing */
-  const vec3f N     = hit_P-pointToWorld(self.center); 
-}
-
-
-
-
-// ==================================================================
-// miss and raygen
-// ==================================================================
-
 inline __device__
 vec3f missColor(const Ray &ray)
 {
@@ -135,44 +222,62 @@ OPTIX_MISS_PROGRAM(miss)()
 }
 
 
+
+
+
+// ==================================================================
+// miss and raygen
+// ==================================================================
+
 OPTIX_RAYGEN_PROGRAM(rayGen)()
 {
-  const RayGenData &self = owl::getProgramData<RayGenData>();
-  const vec2i pixelID = owl::getLaunchIndex();
-	int count = 0;
-  
-	printf(".cu origin = %f,%f,%f\n",self.origin.x,self.origin.y,self.origin.z);
-  vec3f color = 0.f;
-
-    owl::Ray ray(/* origin   : */ self.origin,
-                     /* direction: */ vec3f(0,0,1),
-                     /* tmin     : */ 0,
-                     /* tmax     :  */2);
-    
-    	owl::traceRay(/*accel to trace against*/self.world,
-		        /*the ray to trace*/ray,
-		        /*prd*/color);
-
-  	for(int i = 0; i < ind; i++)
+	const RayGenData &self = owl::getProgramData<RayGenData>();
+	vec3f color = 0.f;  
+	int xID = optixGetLaunchIndex().x;
+	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 2);
+	//printf("Starting ray %d\n", optixGetLaunchIndex().x);
+	
+	
+	////////////////////////////////////////////////////////CALL-1/////////////////////////////////////////////////////////////
+	
+	if(optixLaunchParams.callNum == 1)
+	{		
+		//Launch ray
+		owl::traceRay(self.world, ray, color);
+		
+		//Update core point
+		if (optixLaunchParams.frameBuffer[xID].isCore >= optixLaunchParams.minPts)
 		{
-  		self.fbPtr[i] = a[i];
-			if(a[i] == 1)
-			{
-				printf("i = %d\n",i);
-				count++;
-			}
+			//printf("%d is a core point = %d\n",optixGetLaunchIndex().x,optixLaunchParams.frameBuffer[xID].isCore);
+			optixLaunchParams.frameBuffer[xID].isCore = 1;
 		}
-		printf("Count = %d\n",count);
-		if(count < 3)//self.minPts)
-	  	for(int i = 0; i < ind; i++)
-				self.fbPtr[i] = 0;
-
-
-
-  /*self.fbPtr[1] = 1;
-    self.fbPtr[3] = 1;
-      self.fbPtr[7] = 1;
-  	printf("a[0] = %d\n",a[0]);*/
+		else
+			optixLaunchParams.frameBuffer[xID].isCore = 0;
+	}
+		
+		
+	///////////////////////////////////////////////////////////CALL-2////////////////////////////////////////////////////////////////
+	
+	if(optixLaunchParams.callNum == 2)
+	{	
+		//printf("CallNum2 for %d\n", optixGetLaunchIndex().x);
+			//printf("Parent of %d = %d\n",i,optixLaunchParams.frameBuffer[i].parent);
+		//printf("Checking isCore of %d = %d\n",optixGetLaunchIndex().x, optixLaunchParams.frameBuffer[optixGetLaunchIndex().x].isCore);
+		//printf("Launching %d\n", optixGetLaunchIndex().x);
+		owl::traceRay(self.world, ray, color);
+			
+		//printf("After TraceRay: \n");
+		/*for(i = 0; i < optixLaunchParams.spheresCount; i++)
+		{
+			printf("Find(%d) = %d\n",i,find(optixLaunchParams.frameBuffer[i].parent));
+			optixLaunchParams.frameBuffer[i].parent = find(optixLaunchParams.frameBuffer[i].parent);
+		}*/
+		
+		//optixLaunchParams.frameBuffer[optixGetLaunchIndex().x].parent = find(optixLaunchParams.frameBuffer[optixGetLaunchIndex().x].parent);
+		 		
+	}
+	//printf("Find(13) = %d\n",find(13));
+	//printf("Ending ray %d\n", optixGetLaunchIndex().x);
+	//printf("find(6) = %d, find(25) = %d, find(19) = %d\n", find(6),find(25),find(19));
 }
-
 
