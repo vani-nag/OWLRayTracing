@@ -126,7 +126,7 @@ int main(int ac, char **av)
   // ##################################################################
 
 	//Select minPts,epsilon
-	float radius = 0.5;
+	float radius = 0.85;
 	int minPts = 7500;
 
 	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
@@ -219,13 +219,11 @@ int main(int ac, char **av)
   OWLVarDecl myGlobalsVars[] = {
 	{"frameBuffer", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, frameBuffer)},
 	{"callNum", OWL_INT, OWL_OFFSETOF(MyGlobals, callNum)},
-	{"minPts", OWL_INT, OWL_OFFSETOF(MyGlobals,minPts)},
 	{ /* sentinel to mark end of list */ }
 	};
 	
 	OWLParams lp = owlParamsCreate(context,sizeof(MyGlobals),myGlobalsVars,-1);
-	owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);	
-	owlParamsSet1i(lp,"minPts",minPts);	
+	owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);		
 	
 	
 	LOG_OK("Geoms and Params DONE\n");
@@ -271,7 +269,8 @@ int main(int ac, char **av)
 	OWLVarDecl rayGenVars[] = {
 		{ "spheres",       OWL_BUFPTR, OWL_OFFSETOF(RayGenData,spheres)},
 		{ "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
-		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},	
+		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
+		{ "minPts",				 OWL_INT, 	 OWL_OFFSETOF(RayGenData,minPts)},	
 		{ "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
 		{ "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
 		{ "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
@@ -307,6 +306,7 @@ int main(int ac, char **av)
 	owlRayGenSetBuffer(rayGen,"spheres",        SpheresBuffer);
 	owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
 	owlRayGenSetGroup (rayGen,"world",        world);
+	owlRayGenSet1i		(rayGen,"minPts",				minPts);
 	owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
 	owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
 	owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);

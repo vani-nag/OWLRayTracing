@@ -234,7 +234,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	const RayGenData &self = owl::getProgramData<RayGenData>();
 	vec3f color = 0.f;  
 	int xID = optixGetLaunchIndex().x;
-	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 2);
+	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 1);
 	//printf("Starting ray %d\n", optixGetLaunchIndex().x);
 	
 	
@@ -246,7 +246,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 		owl::traceRay(self.world, ray, color);
 		
 		//Update core point
-		if (optixLaunchParams.frameBuffer[xID].isCore >= optixLaunchParams.minPts)
+		if (optixLaunchParams.frameBuffer[xID].isCore >= self.minPts)
 		{
 			//printf("%d is a core point = %d\n",optixGetLaunchIndex().x,optixLaunchParams.frameBuffer[xID].isCore);
 			optixLaunchParams.frameBuffer[xID].isCore = 1;
