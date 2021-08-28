@@ -97,7 +97,7 @@ int main(int ac, char **av)
 
 	std::string line;
   std::ifstream myfile;
-	myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/input.csv");
+	myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/3droad.csv");
 		
   if(!myfile.is_open())
   {
@@ -126,8 +126,8 @@ int main(int ac, char **av)
   // ##################################################################
 
 	//Select minPts,epsilon
-	float radius = 0.85;
-	int minPts = 7500;
+	float radius = 0.01;
+	int minPts = 100;
 
 	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
 	{
@@ -219,11 +219,13 @@ int main(int ac, char **av)
   OWLVarDecl myGlobalsVars[] = {
 	{"frameBuffer", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, frameBuffer)},
 	{"callNum", OWL_INT, OWL_OFFSETOF(MyGlobals, callNum)},
+	{"minPts", OWL_INT, OWL_OFFSETOF(MyGlobals,minPts)},
 	{ /* sentinel to mark end of list */ }
 	};
 	
 	OWLParams lp = owlParamsCreate(context,sizeof(MyGlobals),myGlobalsVars,-1);
-	owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);		
+	owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);	
+	owlParamsSet1i(lp,"minPts",minPts);	
 	
 	
 	LOG_OK("Geoms and Params DONE\n");
@@ -269,8 +271,7 @@ int main(int ac, char **av)
 	OWLVarDecl rayGenVars[] = {
 		{ "spheres",       OWL_BUFPTR, OWL_OFFSETOF(RayGenData,spheres)},
 		{ "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
-		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
-		{ "minPts",				 OWL_INT, 	 OWL_OFFSETOF(RayGenData,minPts)},	
+		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},	
 		{ "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
 		{ "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
 		{ "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
@@ -306,7 +307,6 @@ int main(int ac, char **av)
 	owlRayGenSetBuffer(rayGen,"spheres",        SpheresBuffer);
 	owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
 	owlRayGenSetGroup (rayGen,"world",        world);
-	owlRayGenSet1i		(rayGen,"minPts",				minPts);
 	owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
 	owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
 	owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
@@ -346,7 +346,7 @@ int main(int ac, char **av)
 	owlParamsSet1i(lp, "callNum", 1);
 	auto start = std::chrono::steady_clock::now();
 	owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
-	
+	cout<<"Call-1 done\n";
 	/*d.download(&Spheres[0]);
 	d.free();
 	cout<<"Status must be -3: "<<Spheres[0].status<<'\n';*/
@@ -368,7 +368,7 @@ int main(int ac, char **av)
 	const DisjointSet *fb = (const DisjointSet*)owlBufferGetPointer(frameBuffer,0);
 	
 
-	
+	std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
 	cout<<"Call-2: FrameBuffer in HOST\n";
 	for(int i = 0; i < Spheres.size(); i++)
 	{
@@ -377,7 +377,7 @@ int main(int ac, char **av)
 	}
 	
 	
-	std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;	
+	
 
 	
 	

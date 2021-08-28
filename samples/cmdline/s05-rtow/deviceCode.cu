@@ -17,15 +17,9 @@
 #include "GeomTypes.h"
 #include <optix_device.h>
 #include</home/min/a/nagara16/Downloads/owl/owl/include/owl/common/parallel/parallel_for.h>
-#define ind 5000
-#define radius 2
+
 using namespace owl;
 #define NUM_SAMPLES_PER_PIXEL 16
-__device__ int a[ind],b[ind];
-__device__ int lock = 0;
-__device__ int cluster_num = 0;
-
-__device__ DisjointSet ds;
 __constant__ MyGlobals optixLaunchParams;
 
 
@@ -234,7 +228,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	const RayGenData &self = owl::getProgramData<RayGenData>();
 	vec3f color = 0.f;  
 	int xID = optixGetLaunchIndex().x;
-	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 1);
+	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 0.0000000001);
 	//printf("Starting ray %d\n", optixGetLaunchIndex().x);
 	
 	
@@ -246,7 +240,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 		owl::traceRay(self.world, ray, color);
 		
 		//Update core point
-		if (optixLaunchParams.frameBuffer[xID].isCore >= self.minPts)
+		if (optixLaunchParams.frameBuffer[xID].isCore >= optixLaunchParams.minPts)
 		{
 			//printf("%d is a core point = %d\n",optixGetLaunchIndex().x,optixLaunchParams.frameBuffer[xID].isCore);
 			optixLaunchParams.frameBuffer[xID].isCore = 1;

@@ -58,11 +58,12 @@ namespace owl {
   // ==================================================================
   struct RayGenData
   {
+    uint32_t *fbPtr;
     vec2i  fbSize;
     OptixTraversableHandle world;
     int sbtOffset;
     Sphere *spheres;
-		int minPts;    
+    
     struct {
       vec3f origin;
       vec3f lower_left_corner;
@@ -83,7 +84,7 @@ namespace owl {
 		//DisjointSet *ds;
 		DisjointSet *frameBuffer;
 		int callNum;
-
+		int minPts;
 		//Sphere *frameBuffer;
 		//int **frameBuffer;
 	};
