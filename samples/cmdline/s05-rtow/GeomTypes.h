@@ -26,7 +26,8 @@ namespace owl {
 	{
 		int parent;
 		int rank;
-		int isCore;
+		int neighCount;
+		int counter;
 	}DisjointSet;
 
 

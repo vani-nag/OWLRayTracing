@@ -35,7 +35,6 @@ __device__ int find(int x)
 		optixLaunchParams.frameBuffer[x].parent = optixLaunchParams.frameBuffer[optixLaunchParams.frameBuffer[x].parent].parent;
 		x = optixLaunchParams.frameBuffer[x].parent;
 	}
-
 	//printf("Leaving find()\n");
 	return 	x;
 }
@@ -105,14 +104,6 @@ OPTIX_BOUNDS_PROGRAM(Spheres)(const void  *geomData,
 
 
 
-// ==================================================================
-// SAXPY
-// ==================================================================
-__global__ void saxpy(int n, float a, int *x, int *y)
-{
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if (i < n) y[i] = a*x[i] + y[i];
-}
 
 
 // ==================================================================
@@ -125,6 +116,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	int xID = optixGetLaunchIndex().x;
   const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
   Sphere self = selfs.prims[primID];
+  int minPts = optixLaunchParams.minPts;
   
   //Inside circle?
   const vec3f org = optixGetWorldRayOrigin();
@@ -142,78 +134,64 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 		if(optixLaunchParams.callNum == 1)		
 		{
 			//printf("[%d] hits %d at %f\n",optixGetLaunchIndex().x, primID, std::sqrt((x*x) + (y*y) + (z*z)));
-			optixLaunchParams.frameBuffer[xID].isCore = optixLaunchParams.frameBuffer[xID].isCore + 1;
+			optixLaunchParams.frameBuffer[xID].neighCount = optixLaunchParams.frameBuffer[xID].neighCount + 1;
 		}
 		
 		
 ///////////////////////////////////////////////////////////CALL-2////////////////////////////////////////////////////////////////
 	
 	
-		if(optixLaunchParams.callNum == 2)
+		if(optixLaunchParams.callNum == 2 && xID > primID)
 		{
-			if(optixLaunchParams.frameBuffer[xID].isCore == 1)
+			if(optixLaunchParams.frameBuffer[xID].neighCount >= minPts)
 			{
-				int xset = find(xID);
-				if(optixLaunchParams.frameBuffer[primID].isCore == 1)
+				int vstat = find(xID);
+				if(optixLaunchParams.frameBuffer[primID].neighCount >= minPts)
 				{
-						int yset = find(primID), xrank = optixLaunchParams.frameBuffer[xset].rank, yrank = optixLaunchParams.frameBuffer[yset].rank;
-						//printf("Before: CORE %d hits %d:\n  parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, primID, find(primID));
-						if (xset != yset)
-						{
-							if (xrank < yrank) 
-								optixLaunchParams.frameBuffer[xset].parent = yset;
-							else if (xrank > yrank) 
-								optixLaunchParams.frameBuffer[yset].parent = xset;
-							else 
-							{
-								optixLaunchParams.frameBuffer[yset].parent = xset;
-								optixLaunchParams.frameBuffer[xset].rank = xrank + 1;
-							}
-						}
-					//printf("After: CORE %d hits %d:\n  parent[%d] = %d \n\n", optixGetLaunchIndex().x, primID, primID, find(primID));
+						int ostat = find(primID);
+						
+						    bool repeat;
+								do
+								{
+									repeat = false;
+									if (vstat != ostat)
+									{
+										int ret;
+										if (vstat < ostat)
+										{
+											if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[ostat].parent), ostat,
+												                                         vstat)) != ostat)
+											{
+												ostat = ret;
+												repeat = true;
+											}
+										}
+										else
+										{
+											if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[vstat].parent), vstat,
+												                                         ostat)) != vstat)
+											{
+												vstat = ret;
+												repeat = true;
+											}
+										}
+									}
+								} while (repeat);
+										
 				}
 					
 					
 				//////////////////////////////////////Critical section//////////////////////////////////////////////////////////////////
-				else
-				{
-					//__syncthreads();
-					//lock();
-					//Union(x,y);
-					//unlock();
-					//printf("CAS for %d:\n Before: parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, find(primID));
-					//atomicCAS(&(optixLaunchParams.frameBuffer[primID].parent), find(primID), find(optixGetLaunchIndex().x)); 
+				
+				else	
+					 optixLaunchParams.frameBuffer[primID].parent = vstat;
+			}		
 					
-					atomicCAS(&(optixLaunchParams.frameBuffer[primID].parent), primID, xset);
-					//printf("CAS for %d: \n After: parent[%d] = %d\n\n", optixGetLaunchIndex().x, primID, find(primID));
-				}
-			}				
+				////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////			
 		}
 	}  
 }
 
-
-/*! transform a _point_ from object to world space */
-inline __device__ vec3f pointToWorld(const vec3f &P)
-{
-  return (vec3f)optixTransformPointFromObjectToWorldSpace(P);
-}
-inline __device__
-vec3f missColor(const Ray &ray)
-{
-  const vec2i pixelID = owl::getLaunchIndex(); 
-  const vec3f rayDir = normalize(ray.direction);
-  const float t = 0.5f*(rayDir.y + 1.0f);
-  const vec3f c = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
-  return c;
-}
-
-OPTIX_MISS_PROGRAM(miss)()
-{
-
-  PerRayData &prd = owl::getPRD<PerRayData>();
-
-}
 
 
 
@@ -228,7 +206,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	const RayGenData &self = owl::getProgramData<RayGenData>();
 	vec3f color = 0.f;  
 	int xID = optixGetLaunchIndex().x;
-	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 0.0000000001);
+	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
 	//printf("Starting ray %d\n", optixGetLaunchIndex().x);
 	
 	
@@ -236,27 +214,24 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	
 	if(optixLaunchParams.callNum == 1)
 	{		
+		//printf("call 1\n");
 		//Launch ray
 		owl::traceRay(self.world, ray, color);
-		
+		/*if(xID == 15790)
+			printf("Neighs = %d\n",optixLaunchParams.frameBuffer[xID].neighCount);
+		if(optixLaunchParams.frameBuffer[xID].neighCount > 100)
+			//atomicAdd(&optixLaunchParams.frameBuffer[xID].counter,optixLaunchParams.frameBuffer[xID].neighCount-100);
+			printf("Neighs = %d\n",optixLaunchParams.frameBuffer[xID].neighCount);*/
 		//Update core point
-		if (optixLaunchParams.frameBuffer[xID].isCore >= optixLaunchParams.minPts)
-		{
-			//printf("%d is a core point = %d\n",optixGetLaunchIndex().x,optixLaunchParams.frameBuffer[xID].isCore);
-			optixLaunchParams.frameBuffer[xID].isCore = 1;
-		}
-		else
-			optixLaunchParams.frameBuffer[xID].isCore = 0;
+		//done in intersect implicitly
 	}
-		
-		
 	///////////////////////////////////////////////////////////CALL-2////////////////////////////////////////////////////////////////
 	
 	if(optixLaunchParams.callNum == 2)
 	{	
 		//printf("CallNum2 for %d\n", optixGetLaunchIndex().x);
 			//printf("Parent of %d = %d\n",i,optixLaunchParams.frameBuffer[i].parent);
-		//printf("Checking isCore of %d = %d\n",optixGetLaunchIndex().x, optixLaunchParams.frameBuffer[optixGetLaunchIndex().x].isCore);
+		//printf("Checking neighCount of %d = %d\n",optixGetLaunchIndex().x, optixLaunchParams.frameBuffer[optixGetLaunchIndex().x].neighCount);
 		//printf("Launching %d\n", optixGetLaunchIndex().x);
 		owl::traceRay(self.world, ray, color);
 			

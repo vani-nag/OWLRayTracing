@@ -119,8 +119,6 @@ int main(int ac, char **av)
 	  }
 	}	
 
-
-
   // ##################################################################
   // Create scene
   // ##################################################################
@@ -237,6 +235,7 @@ int main(int ac, char **av)
     SpheresGeom
   };
 
+	auto start_b = std::chrono::steady_clock::now();
   OWLGroup spheresGroup
     = owlUserGeomGroupCreate(context,1,userGeoms);
   owlGroupBuildAccel(spheresGroup);
@@ -244,6 +243,11 @@ int main(int ac, char **av)
   OWLGroup world
     = owlInstanceGroupCreate(context,1,&spheresGroup);
   owlGroupBuildAccel(world);
+  
+  auto end_b = std::chrono::steady_clock::now();
+	auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
+	std::cout << "Build time: " << elapsed_b.count()/1000000.0 << " seconds." << std::endl;
+
 
   // ##################################################################
   // set miss and raygen programs
@@ -252,14 +256,14 @@ int main(int ac, char **av)
   // -------------------------------------------------------
   // set up miss prog 
   // -------------------------------------------------------
-  OWLVarDecl missProgVars[] = {
-    { /* sentinel to mark end of list */ }
+  /*OWLVarDecl missProgVars[] = {
+    {  }
   };
   // ........... create object  ............................
   OWLMissProg missProg
     = owlMissProgCreate(context,module,"miss",sizeof(MissProgData),
                         missProgVars,-1);
-  owlMissProgSet(context,0,missProg);
+  owlMissProgSet(context,0,missProg);*/
 
 
 
@@ -314,68 +318,50 @@ int main(int ac, char **av)
 
 	// programs have been built before, but have to rebuild raygen and
 	// miss progs
-	auto start_b = std::chrono::steady_clock::now();
+
 	owlBuildPrograms(context);
 	owlBuildPipeline(context);
 	owlBuildSBT(context);
-	auto end_b = std::chrono::steady_clock::now();
-	auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
-	std::cout << "Build time: " << elapsed_b.count()/1000000.0 << " seconds." << std::endl;
 
 	// ##################################################################
 	// DBSCAN Start
 	// ##################################################################
 		
 	std::ofstream ofile;
-	ofile.open("/home/min/a/nagara16/Downloads/owl/build/op.txt", std::ios::out);
-	ofile.close();
-	ofile.open("/home/min/a/nagara16/Downloads/owl/build/op.txt", std::ios::app);
+	/*ofile.open("/home/min/a/nagara16/Downloads/owl/build/op_changedCAS.txt", std::ios::out);
+	ofile.close();*/
+	ofile.open("/home/min/a/nagara16/Downloads/owl/build/op_changedCAS.txt", std::ios::app);
 	
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-	/*int *d_x,x[4];
-	cudaMalloc(&d_x,4*sizeof(int));
-	for(int i=0;i<4;i++)
-		x[i]=i;
-	cudaMemcpy(x, d_x, 4*sizeof(int), cudaMemcpyHostToDevice);
-	
-	DeviceMemory d;
-	d.alloc(Spheres.size()*sizeof(Sphere));
-	d.upload(SpheresBuffer);*/
-	
+	auto start1 = std::chrono::steady_clock::now();	
 	
 	owlParamsSet1i(lp, "callNum", 1);
-	auto start = std::chrono::steady_clock::now();
 	owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
-	cout<<"Call-1 done\n";
-	/*d.download(&Spheres[0]);
-	d.free();
-	cout<<"Status must be -3: "<<Spheres[0].status<<'\n';*/
-	/*const Sphere *sb = (const Sphere*)owlBufferGetPointer(SpheresBuffer,3);
-	cout<<"Status must be -3: "<<sb[0].status<<'\n';*/
-	/*cout<<"FrameBuffer in HOST\n";
-	for(int i = 0; i < sCount; i++)
-	{
-			//Spheres[i].status = 1;
-		cout<<i<<'\t'<<fb[i].parent<<'\t'<<"isCore = "<< fb[i].isCore<<'\n';
-	}*/
+	
+	auto end1 = std::chrono::steady_clock::now();
+	auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+	std::cout << "Core points time: " << elapsed1.count()/1000000.0 << " seconds." << std::endl;
 	
 	
 	////////////////////////////////////////////////////Call-2////////////////////////////////////////////////////////////////////////////	
+	auto start = std::chrono::steady_clock::now();
 	owlParamsSet1i(lp, "callNum", 2);
 	owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
 	auto end = std::chrono::steady_clock::now();
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 	const DisjointSet *fb = (const DisjointSet*)owlBufferGetPointer(frameBuffer,0);
 	
-
+	auto tot = (elapsed.count()/1000000.0) + (elapsed_b.count()/1000000.0);
 	std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
-	cout<<"Call-2: FrameBuffer in HOST\n";
-	for(int i = 0; i < Spheres.size(); i++)
+	std::cout << "Total time = "<< tot <<'\n';
+	//cout<<"Call-2: FrameBuffer in HOST\n";
+	//cout<<"Extra traversals = "<<fb->counter<<'\n';
+	/*for(int i = 0; i < Spheres.size(); i++)
 	{
 		ofile << i << '\t'<< find(fb[i].parent,fb)<< std::endl;
 		//cout<<i<<'\t'<<find(fb[i].parent,fb)<<'\n';
-	}
-	
+	}*/
+	ofile << tot << std::endl;
 	
 	
 
