@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2019 Ingo Wald                                                 //
+// Copyright 2019-2020 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -14,19 +14,33 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-// The Ray Tracing in One Weekend scene, but with cubes substituted for some
-// spheres. This program shows how different geometric types in a single scene
-// are handled.
+// This program renders the recursive Sierpinski tetrahedron to a given depth.
+// The code demonstrates how to create nested instances.
 
 // public owl API
 #include <owl/owl.h>
+#include <owl/DeviceMemory.h>   //here
+#include "GeomTypes.h"          //here
+
 // our device-side data structures
-#include "GeomTypes.h"
+// #include "deviceCode.h"      //here
 // external helper stuff for image output
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
+#include <vector>
 
+//here
+#include<iostream>
+#include<fstream>
+#include<string>
+#include<sstream>
 #include <random>
+#include<ctime>
+#include<chrono>
+#include<algorithm>
+#include<set>
+
+#define FLOAT_MAX 3.402823466e+38
 
 #define LOG(message)                                            \
   std::cout << OWL_TERMINAL_BLUE;                               \
@@ -39,496 +53,179 @@
 
 extern "C" char ptxCode[];
 
-const char *outFileName = "s06-rtow-mixedGeometries.png";
-const vec2i fbSize(160,80);
-const vec3f lookFrom(13, 2, 3);
+const char *outFileName = "s08-sierpinski.png";
+// const vec2i fbSize(800,600);
+const vec3f lookFrom(13,2,3);
 const vec3f lookAt(0, 0, 0);
 const vec3f lookUp(0.f,1.f,0.f);
 const float fovy = 20.f;
 
-std::vector<DielectricSphere> dielectricSpheres;
-std::vector<LambertianSphere> lambertianSpheres;
-std::vector<MetalSphere>      metalSpheres;
+std::vector<Sphere> Spheres;
+std::vector<Sphere> updatedSpheres;
+std::vector<Sphere> tempSpheres;
+std::vector<Neigh> neighbors;
 
-struct {
-  std::vector<vec3f> vertices;
-  std::vector<vec3i> indices;
-  std::vector<Dielectric> materials;
-} dielectricBoxes;
-struct {
-  std::vector<vec3f> vertices;
-  std::vector<vec3i> indices;
-  std::vector<Metal> materials;
-} metalBoxes;
-struct {
-  std::vector<vec3f> vertices;
-  std::vector<vec3i> indices;
-  std::vector<Lambertian> materials;
-} lambertianBoxes;
-
-inline float rnd()
+int main(int ac, char **argv)
 {
-  static std::mt19937 gen(0); //Standard mersenne_twister_engine seeded with rd()
-  static std::uniform_real_distribution<float> dis(0.f, 1.f);
-  return dis(gen);
-}
-
-inline vec3f rnd3f() { return vec3f(rnd(),rnd(),rnd()); }
-
-inline vec3f randomPointInUnitSphere()
-{
-  vec3f p;
-  do {
-    p = 2.f*vec3f(rnd(),rnd(),rnd()) - vec3f(1.f);
-  } while (dot(p,p) >= 1.f);
-  return p;
-}
-
-template<typename BoxArray, typename Material>
-void addRandomBox(BoxArray &boxes,
-                  const vec3f &center,
-                  const float size,
-                  const Material &material)
-{
-  const int NUM_VERTICES = 8;
-  static const vec3f unitBoxVertices[NUM_VERTICES] =
-    {
-      {-1.f, -1.f, -1.f},
-      {+1.f, -1.f, -1.f},
-      {+1.f, +1.f, -1.f}
-    };
-
-  const int NUM_INDICES = 1;
-  /*static const vec3i unitBoxIndices[NUM_INDICES] =
-    {
-      {0, 2, 1}, //face front
-      {0, 3, 2},
-      {2, 3, 4}, //face top
-      {2, 4, 5},
-      {1, 2, 5}, //face right
-      {1, 5, 6},
-      {0, 7, 4}, //face left
-      {0, 4, 3},
-      {5, 4, 7}, //face back
-      {5, 7, 6},
-      {0, 6, 7}, //face bottom
-      {0, 1, 6}
-    };*/
-
-	static const vec3i unitBoxIndices[NUM_INDICES] =
-    {{0,1,2}};	
-
-  const vec3f U = normalize(randomPointInUnitSphere());
-  owl::affine3f xfm = owl::frame(U);
-  xfm = owl::affine3f(owl::linear3f::rotate(U,rnd())) * xfm;
-  xfm = owl::affine3f(owl::linear3f::scale(.7f*size)) * xfm;
-  xfm = owl::affine3f(owl::affine3f::translate(center)) * xfm;
-  
-  const int startIndex = (int)boxes.vertices.size();
-  for (int i=0;i<NUM_VERTICES;i++)
-    boxes.vertices.push_back(owl::xfmPoint(xfm,unitBoxVertices[i]));
-  for (int i=0;i<NUM_INDICES;i++)
-    boxes.indices.push_back(unitBoxIndices[i]+vec3i(startIndex));
-  boxes.materials.push_back(material);
-}
-
-void createScene()
-{
-  lambertianSpheres.push_back({Sphere{vec3f(0.f, -1000.0f, -1.f), 1000.f},
-        Lambertian{vec3f(0.5f, 0.5f, 0.5f)}});
-  
-  /*for (int a = -11; a < 11; a++) {
-    for (int b = -11; b < 11; b++) {
-      float choose_mat = rnd();
-      float choose_shape = rnd();
-      vec3f center(a + rnd(), 0.2f, b + rnd());
-      if (choose_mat < 0.8f) {
-        if (choose_shape > .5f) {
-          addRandomBox(lambertianBoxes,center,.2f,
-                       Lambertian{rnd3f()*rnd3f()});
-        } else
-          lambertianSpheres.push_back({Sphere{center, 0.2f},
-                Lambertian{rnd3f()*rnd3f()}});
-      } else if (choose_mat < 0.95f) {
-        if (choose_shape > .5f) {
-          addRandomBox(metalBoxes,center,.2f,
-                       Metal{0.5f*(1.f+rnd3f()),0.5f*rnd()});
-        } else
-          metalSpheres.push_back({Sphere{center, 0.2f},
-                Metal{0.5f*(1.f+rnd3f()),0.5f*rnd()}});
-      } else {
-        if (choose_shape > .5f) {
-          addRandomBox(dielectricBoxes,center,.2f,
-                       Dielectric{1.5f});
-        } else
-          dielectricSpheres.push_back({Sphere{center, 0.2f},
-                Dielectric{1.5f}});
-      }
-    }
-  }*/
-  vec3f center(-11 + rnd(), 0.2f, -11 + rnd());
-  vec3f center1(-11 + rnd(), 0.2f, -10 + rnd());
-  vec3f center2(-11 + rnd(), 0.2f, -5 + rnd());
-  addRandomBox(lambertianBoxes,center,.2f,
-                       Lambertian{rnd3f()*rnd3f()});
-  addRandomBox(lambertianBoxes,center1,.2f,
-                       Lambertian{rnd3f()*rnd3f()});
-  addRandomBox(lambertianBoxes,center2,.6f,
-                       Lambertian{rnd3f()*rnd3f()});
-  addRandomBox(metalBoxes,center1,.2f,
-                       Metal{0.5f*(1.f+rnd3f()),0.5f*rnd()});
-  addRandomBox(dielectricBoxes,center2,.2f,
-                       Dielectric{1.5f});
-
-  dielectricSpheres.push_back({Sphere{vec3f(0.f, 1.f, 0.f), 1.f},
-        Dielectric{1.5f}});
-  metalSpheres.push_back({Sphere{vec3f(4.f, 1.f, 0.f), 1.f},
-        Metal{vec3f(0.7f, 0.6f, 0.5f), 0.0f}});
-}
-  
-int main(int ac, char **av)
-{
-  // ##################################################################
-  // pre-owl host-side set-up
+  std::string line;
+  std::ifstream myfile;
+  myfile.open(argv[1]);
+  //myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/temp.csv");
+  if(!myfile.is_open())
+  {
+    perror("Error open");
+    exit(EXIT_FAILURE);
+  }
+  std::vector<float> vect;
+  while(getline(myfile, line)) 
+	{
+	  std::stringstream ss(line);
+	  float i;
+	  while (ss >> i)
+	  {
+      vect.push_back(i);
+      if (ss.peek() == ',')
+          ss.ignore();
+	  }
+	}	
+// ##################################################################
+  // Create scene
   // ##################################################################
 
-  LOG("owl example '" << av[0] << "' starting up");
+  //Select minPts,epsilon
+	float radius = atof(argv[2]); //
+	int knn = 5;
+	vec3f org = vec3f(vect.at(0),vect.at(1),vect.at(2));
 
-  LOG("creating the scene ...");
-  createScene();
-  LOG_OK("created scene:");
-  LOG_OK(" num lambertian spheres: " << lambertianSpheres.size());
-  LOG_OK(" num dielectric spheres: " << dielectricSpheres.size());
-  LOG_OK(" num metal spheres     : " << metalSpheres.size());
+	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
+		Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2)),j});
+
+	//Init neighbors array
+	for(int j=0; j<Spheres.size(); j++){
+    		for(int i = 0; i < knn; i++)
+		  neighbors.push_back(Neigh{-1,FLOAT_MAX,0});
+  }
   
-  // ##################################################################
+		
+	
+	//Frame Buffer -- just one thread for a single query point
+	vec2i fbSize(Spheres.size(),1);
+
+  LOG_OK(" num spheres: " << Spheres.size());
+
+// ##################################################################
   // init owl
   // ##################################################################
 
   OWLContext context = owlContextCreate(nullptr,1);
   OWLModule  module  = owlModuleCreate(context,ptxCode);
-  
-  // ##################################################################
+	LOG_OK("init DONE\n");
+
+// ##################################################################
   // set up all the *GEOMETRY* graph we want to render
   // ##################################################################
 
-  // -------------------------------------------------------
-  // declare *sphere* geometry type(s)
-  // -------------------------------------------------------
-
-  // ----------- metal -----------
-  OWLVarDecl metalSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(MetalSpheresGeom,prims)},
+  OWLVarDecl SpheresGeomVars[] = {
+    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom,prims)},
+    { "rad", OWL_FLOAT, OWL_OFFSETOF(SpheresGeom,rad)},
     { /* sentinel to mark end of list */ }
   };
-  OWLGeomType metalSpheresGeomType
+
+  OWLGeomType SpheresGeomType
     = owlGeomTypeCreate(context,
                         OWL_GEOMETRY_USER,
-                        sizeof(MetalSpheresGeom),
-                        metalSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(metalSpheresGeomType,0,
-                           module,"MetalSpheres");
-  owlGeomTypeSetIntersectProg(metalSpheresGeomType,0,
-                              module,"MetalSpheres");
-  owlGeomTypeSetBoundsProg(metalSpheresGeomType,
-                           module,"MetalSpheres");
+                        sizeof(SpheresGeom),
+                        SpheresGeomVars,-1);
+  owlGeomTypeSetIntersectProg(SpheresGeomType,0,
+                              module,"Spheres");
+  owlGeomTypeSetBoundsProg(SpheresGeomType,
+                           module,"Spheres");
 
-  // ----------- dielectric -----------
-  OWLVarDecl dielectricSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(DielectricSpheresGeom,prims)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType dielectricSpheresGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_USER,
-                        sizeof(DielectricSpheresGeom),
-                        dielectricSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(dielectricSpheresGeomType,0,
-                           module,"DielectricSpheres");
-  owlGeomTypeSetIntersectProg(dielectricSpheresGeomType,0,
-                              module,"DielectricSpheres");
-  owlGeomTypeSetBoundsProg(dielectricSpheresGeomType,
-                           module,"DielectricSpheres");
-
-  // ----------- lambertian -----------
-  OWLVarDecl lambertianSpheresGeomVars[] = {
-    { "prims",  OWL_BUFPTR, OWL_OFFSETOF(LambertianSpheresGeom,prims)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType lambertianSpheresGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_USER,
-                        sizeof(LambertianSpheresGeom),
-                        lambertianSpheresGeomVars,-1);
-  owlGeomTypeSetClosestHit(lambertianSpheresGeomType,0,
-                           module,"LambertianSpheres");
-  owlGeomTypeSetIntersectProg(lambertianSpheresGeomType,0,
-                              module,"LambertianSpheres");
-  owlGeomTypeSetBoundsProg(lambertianSpheresGeomType,
-                           module,"LambertianSpheres");
-
-
-
-  // -------------------------------------------------------
-  // declare *boxes* geometry type(s)
-  // -------------------------------------------------------
-
-  // ----------- metal -----------
-  OWLVarDecl metalBoxesGeomVars[] = {
-    { "perBoxMaterial", OWL_BUFPTR, OWL_OFFSETOF(MetalBoxesGeom,perBoxMaterial)},
-    { "vertex",         OWL_BUFPTR, OWL_OFFSETOF(MetalBoxesGeom,vertex)},
-    { "index",          OWL_BUFPTR, OWL_OFFSETOF(MetalBoxesGeom,index)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType metalBoxesGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_TRIANGLES,
-                        sizeof(MetalBoxesGeom),
-                        metalBoxesGeomVars,-1);
-  owlGeomTypeSetClosestHit(metalBoxesGeomType,0,
-                           module,"MetalBoxes");
-
-  // ----------- dielectric -----------
-  OWLVarDecl dielectricBoxesGeomVars[] = {
-    { "perBoxMaterial", OWL_BUFPTR, OWL_OFFSETOF(DielectricBoxesGeom,perBoxMaterial)},
-    { "vertex",         OWL_BUFPTR, OWL_OFFSETOF(DielectricBoxesGeom,vertex)},
-    { "index",          OWL_BUFPTR, OWL_OFFSETOF(DielectricBoxesGeom,index)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType dielectricBoxesGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_TRIANGLES,
-                        sizeof(DielectricBoxesGeom),
-                        dielectricBoxesGeomVars,-1);
-  owlGeomTypeSetClosestHit(dielectricBoxesGeomType,0,
-                           module,"DielectricBoxes");
-
-  // ----------- lambertian -----------
-  OWLVarDecl lambertianBoxesGeomVars[] = {
-    { "perBoxMaterial", OWL_BUFPTR, OWL_OFFSETOF(LambertianBoxesGeom,perBoxMaterial)},
-    { "vertex",         OWL_BUFPTR, OWL_OFFSETOF(LambertianBoxesGeom,vertex)},
-    { "index",          OWL_BUFPTR, OWL_OFFSETOF(LambertianBoxesGeom,index)},
-    { /* sentinel to mark end of list */ }
-  };
-  OWLGeomType lambertianBoxesGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_GEOMETRY_TRIANGLES,
-                        sizeof(LambertianBoxesGeom),
-                        lambertianBoxesGeomVars,-1);
-  owlGeomTypeSetClosestHit(lambertianBoxesGeomType,0,
-                           module,"LambertianBoxes");
-  
-
-  // -------------------------------------------------------
-  // make sure to do that *before* setting up the geometry, since the
-  // user geometry group will need the compiled bounds programs upon
-  // accelBuild()
-  // -------------------------------------------------------
   owlBuildPrograms(context);
+  LOG_OK("BUILD prog DONE\n");
 
+  OWLBuffer frameBuffer
+    = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]),
+                            neighbors.size(), neighbors.data());
+ 
+  OWLBuffer SpheresBuffer
+    = owlDeviceBufferCreate(context,OWL_USER_TYPE(Spheres[0]),
+                            Spheres.size(),Spheres.data());
 
+  // ------------------------------------------------------------------
+  // create actual geometry
+  // ------------------------------------------------------------------
 
-
-
-
-  // ##################################################################
-  // set up all the *GEOMS* we want to run that code on
-  // ##################################################################
-
-  LOG("building geometries ...");
-
-  // ====================== SPHERES ======================
-  
-  // ----------- metal -----------
-  OWLBuffer metalSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(metalSpheres[0]),
-                            metalSpheres.size(),metalSpheres.data());
-  OWLGeom metalSpheresGeom
-    = owlGeomCreate(context,metalSpheresGeomType);
-  owlGeomSetPrimCount(metalSpheresGeom,metalSpheres.size());
-  owlGeomSetBuffer(metalSpheresGeom,"prims",metalSpheresBuffer);
-
-  // ----------- lambertian -----------
-  OWLBuffer lambertianSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(lambertianSpheres[0]),
-                            lambertianSpheres.size(),lambertianSpheres.data());
-  OWLGeom lambertianSpheresGeom
-    = owlGeomCreate(context,lambertianSpheresGeomType);
-  owlGeomSetPrimCount(lambertianSpheresGeom,lambertianSpheres.size());
-  owlGeomSetBuffer(lambertianSpheresGeom,"prims",lambertianSpheresBuffer);
-
-  // ----------- dielectric -----------
-  OWLBuffer dielectricSpheresBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(dielectricSpheres[0]),
-                            dielectricSpheres.size(),dielectricSpheres.data());
-  OWLGeom dielectricSpheresGeom
-    = owlGeomCreate(context,dielectricSpheresGeomType);
-  owlGeomSetPrimCount(dielectricSpheresGeom,dielectricSpheres.size());
-  owlGeomSetBuffer(dielectricSpheresGeom,"prims",dielectricSpheresBuffer);
-
-
-
-
-
-  // ====================== BOXES ======================
-  
-  // ----------- metal -----------
-  OWLBuffer metalMaterialsBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(metalBoxes.materials[0]),
-                            metalBoxes.materials.size(),
-                            metalBoxes.materials.data());
-  OWLBuffer metalVerticesBuffer
-    = owlDeviceBufferCreate(context,OWL_FLOAT3,
-                            metalBoxes.vertices.size(),
-                            metalBoxes.vertices.data());
-  OWLBuffer metalIndicesBuffer
-    = owlDeviceBufferCreate(context,OWL_INT3,
-                            metalBoxes.indices.size(),
-                            metalBoxes.indices.data());
-  OWLGeom metalBoxesGeom
-    = owlGeomCreate(context,metalBoxesGeomType);
-  owlTrianglesSetVertices(metalBoxesGeom,metalVerticesBuffer,
-                          metalBoxes.vertices.size(),
-                          sizeof(metalBoxes.vertices[0]),0);
-  owlTrianglesSetIndices(metalBoxesGeom,metalIndicesBuffer,
-                         metalBoxes.indices.size(),
-                         sizeof(metalBoxes.indices[0]),0);
-  owlGeomSetBuffer(metalBoxesGeom,"perBoxMaterial",metalMaterialsBuffer);
-  owlGeomSetBuffer(metalBoxesGeom,"vertex",metalVerticesBuffer);
-  owlGeomSetBuffer(metalBoxesGeom,"index",metalIndicesBuffer);
-  
-  // ----------- lambertian -----------
-  OWLBuffer lambertianMaterialsBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(lambertianBoxes.materials[0]),
-                            lambertianBoxes.materials.size(),
-                            lambertianBoxes.materials.data());
-  OWLBuffer lambertianVerticesBuffer
-    = owlDeviceBufferCreate(context,OWL_FLOAT3,
-                            lambertianBoxes.vertices.size(),
-                            lambertianBoxes.vertices.data());
-  OWLBuffer lambertianIndicesBuffer
-    = owlDeviceBufferCreate(context,OWL_INT3,
-                            lambertianBoxes.indices.size(),
-                            lambertianBoxes.indices.data());
-  OWLGeom lambertianBoxesGeom
-    = owlGeomCreate(context,lambertianBoxesGeomType);
-  owlTrianglesSetVertices(lambertianBoxesGeom,lambertianVerticesBuffer,
-                          lambertianBoxes.vertices.size(),
-                          sizeof(lambertianBoxes.vertices[0]),0);
-  owlTrianglesSetIndices(lambertianBoxesGeom,lambertianIndicesBuffer,
-                         lambertianBoxes.indices.size(),
-                         sizeof(lambertianBoxes.indices[0]),0);
-  owlGeomSetBuffer(lambertianBoxesGeom,"perBoxMaterial",lambertianMaterialsBuffer);
-  owlGeomSetBuffer(lambertianBoxesGeom,"vertex",lambertianVerticesBuffer);
-  owlGeomSetBuffer(lambertianBoxesGeom,"index",lambertianIndicesBuffer);
-  
-  // ----------- dielectric -----------
-  OWLBuffer dielectricMaterialsBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(dielectricBoxes.materials[0]),
-                            dielectricBoxes.materials.size(),
-                            dielectricBoxes.materials.data());
-  OWLBuffer dielectricVerticesBuffer
-    = owlDeviceBufferCreate(context,OWL_FLOAT3,
-                            dielectricBoxes.vertices.size(),
-                            dielectricBoxes.vertices.data());
-  OWLBuffer dielectricIndicesBuffer
-    = owlDeviceBufferCreate(context,OWL_INT3,
-                            dielectricBoxes.indices.size(),
-                            dielectricBoxes.indices.data());
-  OWLGeom dielectricBoxesGeom
-    = owlGeomCreate(context,dielectricBoxesGeomType);
-  owlTrianglesSetVertices(dielectricBoxesGeom,dielectricVerticesBuffer,
-                          dielectricBoxes.vertices.size(),
-                          sizeof(dielectricBoxes.vertices[0]),0);
-  owlTrianglesSetIndices(dielectricBoxesGeom,dielectricIndicesBuffer,
-                         dielectricBoxes.indices.size(),
-                         sizeof(dielectricBoxes.indices[0]),0);
-  owlGeomSetBuffer(dielectricBoxesGeom,"perBoxMaterial",dielectricMaterialsBuffer);
-  owlGeomSetBuffer(dielectricBoxesGeom,"vertex",dielectricVerticesBuffer);
-  owlGeomSetBuffer(dielectricBoxesGeom,"index",dielectricIndicesBuffer);
-  
-
-  for(int i = 0; i < dielectricBoxes.vertices.size(); i++)
-  	printf("index from createTriangle = %f,%f,%f \n",dielectricBoxes.vertices.at(i).x,dielectricBoxes.vertices.at(i).y,dielectricBoxes.vertices.at(i).z );
+  OWLGeom SpheresGeom = owlGeomCreate(context,SpheresGeomType);
+  owlGeomSetPrimCount(SpheresGeom,Spheres.size());
+  owlGeomSetBuffer(SpheresGeom,"prims",SpheresBuffer);
+  owlGeomSet1f(SpheresGeom,"rad",radius);
 
   // ##################################################################
-  // set up all *ACCELS* we need to trace into those groups
+  // Params
   // ##################################################################
+  
+  OWLVarDecl myGlobalsVars[] = {
+	{"frameBuffer", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, frameBuffer)},
+	{"k", OWL_INT, OWL_OFFSETOF(MyGlobals, k)},
+	{"spheres", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, spheres)},
+	{"distRadius", OWL_FLOAT, OWL_OFFSETOF(MyGlobals, distRadius)},
+	{ /* sentinel to mark end of list */ }
+	};
 
-  // ----------- one group for the spheres -----------
-  /* (note these are user geoms, so have to be in another group than the triangle
-     meshes) */
+	OWLParams lp = owlParamsCreate(context,sizeof(MyGlobals),myGlobalsVars,-1);
+	owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);	
+	owlParamsSet1i(lp,"k",knn);	
+	owlParamsSetBuffer(lp,"spheres",SpheresBuffer);	
+	owlParamsSet1f(lp,"distRadius",radius);
+	LOG_OK("Geoms and Params DONE\n");
+
+  // ------------------------------------------------------------------
+  // set up all accel(s) we need to trace into those groups
+  // ------------------------------------------------------------------
+
   OWLGeom  userGeoms[] = {
-    lambertianSpheresGeom,
-    metalSpheresGeom,
-    dielectricSpheresGeom
+    SpheresGeom
   };
-  OWLGroup userGeomGroup
-    = owlUserGeomGroupCreate(context,3,userGeoms);
-  owlGroupBuildAccel(userGeomGroup);
 
-  // ----------- one group for the boxes -----------
-  /* (note these are made of triangles, so have to be in another group
-     than the sphere geoms) */
-  OWLGeom  triangleGeoms[] = {
-    lambertianBoxesGeom,
-    metalBoxesGeom,
-    dielectricBoxesGeom
-  };
-  OWLGroup triangleGeomGroup
-    = owlTrianglesGeomGroupCreate(context,3,triangleGeoms);
-  owlGroupBuildAccel(triangleGeomGroup);
+	auto start_b = std::chrono::steady_clock::now();
+  OWLGroup spheresGroup
+    = owlUserGeomGroupCreate(context,1,userGeoms);
+  owlGroupBuildAccel(spheresGroup);
 
-  // ----------- one final group with one instance each -----------
-  /* (this is just the simplest way of creating triangular with
-  non-triangular geometry: create one separate instance each, and
-  combine them in a instance group) */
-  OWLGroup world =
-    owlInstanceGroupCreate(context,2);
-  owlInstanceGroupSetChild(world,0,userGeomGroup);
-  owlInstanceGroupSetChild(world,1,triangleGeomGroup);
+  OWLGroup world
+    = owlInstanceGroupCreate(context,1,&spheresGroup);
   owlGroupBuildAccel(world);
 
-  // ##################################################################
+  auto end_b = std::chrono::steady_clock::now();
+	auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
+	std::cout << "Build time: " << elapsed_b.count()/1000000.0 << " seconds." << std::endl;
+
+// ##################################################################
   // set miss and raygen programs
   // ##################################################################
-  
-  // -------------------------------------------------------
-  // set up miss prog 
-  // -------------------------------------------------------
-  OWLVarDecl missProgVars[] = {
-    { /* sentinel to mark end of list */ }
-  };
-  // ........... create object  ............................
-  OWLMissProg missProg
-    = owlMissProgCreate(context,module,"miss",sizeof(MissProgData),
-                        missProgVars,-1);
-  owlMissProgSet(context,0,missProg);
-  
-  // ........... set variables  ............................
-  /* nothing to set */
+		
+	// -------------------------------------------------------
+	// set up ray gen program
+	// -------------------------------------------------------
+	OWLVarDecl rayGenVars[] = {
+    //{"spheres",       OWL_BUFPTR, OWL_OFFSETOF(RayGenData,spheres)},
+		{ "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
+		{ "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},	
+		{ "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
+		{ "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
+		{ "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
+		{ "camera.vert",   OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.vertical)},
+		{ /* sentinel to mark end of list */ }
+	};
 
-  // -------------------------------------------------------
-  // set up ray gen program
-  // -------------------------------------------------------
-  OWLVarDecl rayGenVars[] = {
-    { "fbPtr",         OWL_BUFPTR, OWL_OFFSETOF(RayGenData,fbPtr)},
-    { "fbSize",        OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
-    { "world",         OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
-    { "camera.org",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.origin)},
-    { "camera.llc",    OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.lower_left_corner)},
-    { "camera.horiz",  OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.horizontal)},
-    { "camera.vert",   OWL_FLOAT3, OWL_OFFSETOF(RayGenData,camera.vertical)},
-    { /* sentinel to mark end of list */ }
-  };
+	// ........... create object  ............................
+	OWLRayGen rayGen
+		= owlRayGenCreate(context,module,"rayGen",
+			                sizeof(RayGenData),
+			                rayGenVars,-1);
 
-  // ........... create object  ............................
-  OWLRayGen rayGen
-    = owlRayGenCreate(context,module,"rayGen",
-                      sizeof(RayGenData),
-                      rayGenVars,-1);
-
-  // ........... compute variable values  ..................
+  // compute camera frame:
   const float vfov = fovy;
   const vec3f vup = lookUp;
   const float aspect = fbSize.x / float(fbSize.y);
@@ -545,49 +242,218 @@ int main(int ac, char **av)
   const vec3f horizontal = 2.0f*half_width*focusDist*u;
   const vec3f vertical = 2.0f*half_height*focusDist*v;
 
-  OWLBuffer frameBuffer
-    = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x*fbSize.y);
-
   // ----------- set variables  ----------------------------
-  owlRayGenSetBuffer(rayGen,"fbPtr",        frameBuffer);
-  owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
-  owlRayGenSetGroup (rayGen,"world",        world);
-  owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
-  owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
-  owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
-  owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
-  
-  // ##################################################################
-  // build *SBT* required to trace the groups
-  // ##################################################################
+  //owlRayGenSetBuffer(rayGen,"spheres",        SpheresBuffer);
 
-  // programs have been built before, but have to rebuild raygen and
-  // miss progs
+	owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
+	owlRayGenSetGroup (rayGen,"world",        world);
+	owlRayGenSet3f    (rayGen,"camera.org",   (const owl3f&)origin);
+	owlRayGenSet3f    (rayGen,"camera.llc",   (const owl3f&)lower_left_corner);
+	owlRayGenSet3f    (rayGen,"camera.horiz", (const owl3f&)horizontal);
+	owlRayGenSet3f    (rayGen,"camera.vert",  (const owl3f&)vertical);
+
+  // ------------------------------------------------------------------
+  // build shader binding table required to trace the groups
+  // ------------------------------------------------------------------
+  LOG("building SBT ...");
   owlBuildPrograms(context);
   owlBuildPipeline(context);
   owlBuildSBT(context);
+  LOG_OK("everything set up ...");
 
-  // ##################################################################
-  // now that everything is ready: launch it ....
-  // ##################################################################
+ 
+	std::ofstream ofile;
+
+	
+	//ofile.open("/home/min/a/dmandara/owl/build/3droad_5neighs_2rad.csv", std::ios::app);
+	bool foundKNN = 0, flag;
+	int numRounds = 0;
+	//auto start,end,elapsed,start_rebuild, end_rebuild, elapsed_rebuild;
+	const Neigh *fb;
+	
+	auto start = std::chrono::steady_clock::now();
+	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
+	while(!foundKNN)
+	{
+		cout<<"\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
+		//auto start = std::chrono::steady_clock::now();	
+		
+		owlAsyncLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
+		
+		//auto end = std::chrono::steady_clock::now();
+		//auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+		//std::cout << "Core points time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
+		fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
+		
+
+		foundKNN = 1;
+		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
+		std::ofstream outfile;
+		outfile.open("res_rtx.txt");
+		for(int j=0; j<Spheres.size(); j++)
+		{
+			
+		
+			outfile<<"Point ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
+			for(int i = 0; i < knn; i++)          
+				outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';  
+			
+			if(fb[j*knn].numNeighbors < knn)
+			{
+				cout<<"Neighbors less than k at j = "<<j<<'\n';
+				foundKNN = 0;
+				//updatedSpheres.push_back(Spheres.at(j));
+			}
+			
+		}
+		if(foundKNN == 0)
+		{
+			radius *= 2;
+			owlGeomSet1f(SpheresGeom,"rad",radius);
+			owlParamsSet1f(lp,"distRadius",radius);
+			//start_rebuild = std::chrono::steady_clock::now();
+			owlGroupRefitAccel(spheresGroup);
+			owlGroupRefitAccel(world); 
+			//end_rebuild = std::chrono::steady_clock::now();
+			//elapsed_rebuild = std::chrono::duration_cast<std::chrono::microseconds>(end_rebuild - start_rebuild);
+			//std::cout << "\n\n\n\nRe-Build time: " << elapsed_rebuild.count()/1000000.0 << " seconds." << std::endl;
+		}
+		outfile.close();
+		
+		
+	}
+	auto end = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << "True KNN time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
+
+	
+		
+		
+		///////////////////////////////////////////////////////////Call-2////////////////////////////////////////////////////////////////////////////////
+		
+		//frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]), neighbors.size(), neighbors.data());
+                            
+   //updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),updatedSpheres.size(),updatedSpheres.data());
+                            
+	//owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);
+
+	
+
+		//update spheres
+		/*cout<<"\n\nRound 2 \nUpdated spheres: \n";
+		for(int j = 0; j < updatedSpheres.size(); j++) 
+			cout<<"("<<updatedSpheres.at(j).center.x<<", "<<updatedSpheres.at(j).center.y<<", "<<updatedSpheres.at(j).center.z<<") "<<'\t'<<"Index = "<< updatedSpheres.at(j).index<<'\n';
+		cout<<"Original spheres: \n";
+		for(int j = 0; j < Spheres.size(); j++) 
+			cout<<"("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<") "<<'\t'<<"Index = "<<Spheres.at(j).index<<'\n';
+
+
+		if(foundKNN == 0)
+		{
+			frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]),
+                            neighbors.size(), neighbors.data());
+                            
+			updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),
+							updatedSpheres.size(),updatedSpheres.data());
+		                          
+
+			
+
+		  	radius *= 2;
+		  	owlGeomSet1f(SpheresGeom,"rad",radius); 
+			//owlGeomSetBuffer(SpheresGeom,"prims",SpheresBuffer);
+			owlParamsSet1f(lp,"distRadius",radius);
+			
+			//Re-fit
+			//owlGroupBuildAccel(spheresGroup);
+  		  //  owlGroupBuildAccel(world);
+
+			owlGroupRefitAccel(spheresGroup);
+  		    owlGroupRefitAccel(world);
+  		
+			//Update launch params, rayGen vars
+			//owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);
+			owlParamsSetBuffer(lp,"spheres",updatedSpheresBuffer);
+			fbSize = vec2i(updatedSpheres.size(),1);
+			owlRayGenSet2i(rayGen,"fbSize",(const owl2i&)fbSize);
+			
+			//Re-build SBT
+			//owlBuildPrograms(context);
+			//owlBuildPipeline(context);
+			//owlBuildSBT(context);
+  		
+  			owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
+			fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
+			tempSpheres = updatedSpheres;
+			updatedSpheres.clear();
+			for(int j=0; j<tempSpheres.size(); j++)
+			{
+				outfile<<"Round 2 \n\nPoint ("<<tempSpheres.at(j).center.x<<", "<<tempSpheres.at(j).center.y<<", "<<tempSpheres.at(j).center.z<<")\n";
+				for(int i = 0; i < knn; i++)          
+				outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';
+				
+				//cout<<"knn = "<<knn<<'\n';
+				if(fb[tempSpheres.at(j).index*knn].numNeighbors < knn)
+				{
+					cout<<"Neighbors less than k at index = "<<tempSpheres.at(j).index<<" numNeighs = "<<fb[tempSpheres.at(j).index*knn].numNeighbors<<'\n';
+					foundKNN = 0;
+					updatedSpheres.push_back(tempSpheres.at(j));
+				}
+			}
+  		}
+  //}
   
-  LOG("launching ...");
-  owlRayGenLaunch2D(rayGen,fbSize.x,fbSize.y);
   
-  LOG("done with launch, writing picture ...");
-  // for host pinned mem it doesn't matter which device we query...
-  const uint32_t *fb
-    = (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
-  stbi_write_png(outFileName,fbSize.x,fbSize.y,4,
-                 fb,fbSize.x*sizeof(uint32_t));
-  LOG_OK("written rendered frame buffer to file "<<outFileName);
+  		///////////////////////////////////////////////////////////Call-3////////////////////////////////////////////////////////////////////////////////
+		//update spheres
+		/*cout<<"\n\nRound 3 \nUpdated spheres: \n";
+		for(int j = 0; j < updatedSpheres.size(); j++) 
+			cout<<"("<<updatedSpheres.at(j).center.x<<", "<<updatedSpheres.at(j).center.y<<", "<<updatedSpheres.at(j).center.z<<") "<<'\t'<<"Index = "<< updatedSpheres.at(j).index<<'\n';
+		if(foundKNN == 0)
+		{
+			updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),
+		                          updatedSpheres.size(),updatedSpheres.data());
+		  radius *= 20;
+			owlGeomSet1f(SpheresGeom,"rad",radius); 
+			
+			owlGroupRefitAccel(spheresGroup);
+  		owlGroupRefitAccel(world);
+  		
+  		//Update launch params, rayGen vars
+  		owlParamsSetBuffer(lp,"spheres",updatedSpheresBuffer);
+  		fbSize = vec2i(updatedSpheres.size(),1);
+			
+			owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
+		  
+		  //Re-build SBT
+  		owlBuildSBT(context);
+  		
+  		owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
+		  fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
+		  tempSpheres = updatedSpheres;
+		  updatedSpheres.clear();
+		  for(int j=0; j<tempSpheres.size(); j++)
+			{
+			
+				outfile<<"Round 3 \n\nPoint ("<<tempSpheres.at(j).center.x<<", "<<tempSpheres.at(j).center.y<<", "<<tempSpheres.at(j).center.z<<")\n";
+				for(int i = 0; i < knn; i++)          
+				  outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';
+				
+				cout<<"knn = "<<knn<<'\n';
+				if(fb[tempSpheres.at(j).index*knn].numNeighbors < knn)
+			  {
+			  	cout<<"Neighbors less than k at index = "<<tempSpheres.at(j).index<<" numNeighs = "<<fb[tempSpheres.at(j).index*knn].numNeighbors<<'\n';
+			  	foundKNN = 0;
+			  	updatedSpheres.push_back(tempSpheres.at(j));
+			  }
+			}
+  	}*/
+
 
   // ##################################################################
   // and finally, clean up
   // ##################################################################
-  
-  LOG("destroying devicegroup ...");
+
   owlContextDestroy(context);
-  
-  LOG_OK("seems all went OK; app is done, this should be the last output ...");
+
 }

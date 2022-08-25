@@ -14,13 +14,21 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
+// #include "deviceCode.h"
 #include "GeomTypes.h"
 #include <optix_device.h>
+// here
+//#include</home/min/a/nagara16/owl/owl/include/owl/common/parallel/parallel_for.h>
 
 using namespace owl;
 
-#define NUM_SAMPLES_PER_PIXEL 32 
+#define NUM_SAMPLES_PER_PIXEL 16
 
+//here
+__constant__ MyGlobals optixLaunchParams;
+#define FLOAT_MIN 1.175494351e-38
+#define FLOAT_MAX 3.402823466e+38
+__device__ int intersections = 0;
 // ==================================================================
 // bounding box programs - since these don't actually use the material
 // they're all the same irrespective of geometry type, so use a
@@ -30,272 +38,124 @@ template<typename SphereGeomType>
 inline __device__ void boundsProg(const void *geomData,
                                   box3f &primBounds,
                                   const int primID)
-{
+{   
   const SphereGeomType &self = *(const SphereGeomType*)geomData;
-  const Sphere sphere = self.prims[primID].sphere;
+	//printf("BOUNDS: Radius = %f\n",self.rad);
+  const Sphere sphere = self.prims[primID];
   primBounds = box3f()
-    .extend(sphere.center - sphere.radius)
-    .extend(sphere.center + sphere.radius);
+    .extend(sphere.center - self.rad)
+    .extend(sphere.center + self.rad);	
+
 }
 
-OPTIX_BOUNDS_PROGRAM(MetalSpheres)(const void  *geomData,
-                                        box3f       &primBounds,
-                                        const int    primID)
-{ boundsProg<MetalSpheresGeom>(geomData,primBounds,primID); }
 
-OPTIX_BOUNDS_PROGRAM(LambertianSpheres)(const void  *geomData,
-                                        box3f       &primBounds,
-                                        const int    primID)
-{ boundsProg<LambertianSpheresGeom>(geomData,primBounds,primID); }
+OPTIX_BOUNDS_PROGRAM(Spheres)(const void  *geomData,
+  box3f       &primBounds,
+  const int    primID)
+{ boundsProg<SpheresGeom>(geomData,primBounds,primID); }
 
-OPTIX_BOUNDS_PROGRAM(DielectricSpheres)(const void  *geomData,
-                                        box3f       &primBounds,
-                                        const int    primID)
-{ boundsProg<DielectricSpheresGeom>(geomData,primBounds,primID); }
+
+
 
 
 // ==================================================================
 // intersect programs - still all the same, since they don't use the
 // material, either
 // ==================================================================
+OPTIX_INTERSECT_PROGRAM(Spheres)()
+{ 
 
-template<typename SpheresGeomType>
-inline __device__ void intersectProg()
-{
-  const int primID = optixGetPrimitiveIndex();
-  // printf("isec %i %lx\n",primID,&owl::getProgramData<SpheresGeomType>());
-  const auto &self
-    = owl::getProgramData<SpheresGeomType>().prims[primID];
+	//optixLaunchParams.spheres[optixGetPrimitiveIndex()] => updated sphere
+	//index field of updated sphere gives me index into original spheres array used for scene
+	const int primID = optixLaunchParams.spheres[optixGetPrimitiveIndex()].index;
+	int xID = optixLaunchParams.spheres[optixGetLaunchIndex().x].index;
+	int k = optixLaunchParams.k;
+	
+	//Count number of intersections
+	intersections += 1;
+	
+	//Has original spheres
+	const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
+	//printf("INTERSECT: radius = %f\n",selfs.rad);
+	Sphere self = selfs.prims[primID];
+	
+  	//int xID = selfs.prims[optixGetLaunchIndex().x].index;
+  	//printf("INTERSECT: xID = %d and primID = %d\n",xID,primID);
+  	//printf("xID = %d and optixGetLaunchIndex().x = %d\n",xID, optixGetLaunchIndex().x);
+	  //int xID = optixGetLaunchIndex().x;
+	float maxDist = optixLaunchParams.frameBuffer[xID*k].dist;
+
+	//Both xID and primID are indices of original spheres array used for scene
+	if(xID != primID)
+	{
+		//Inside circle?
+		const vec3f org = optixGetWorldRayOrigin();
+		float x,y,z;
+		
+		//Get x2-x1, y2-y1, z2-z1
+		x = self.center.x - org.x;
+		y = self.center.y - org.y;
+		z = self.center.z - org.z;
+		float distance = std::sqrt((x*x) + (y*y) + (z*z));
+		
+		//printf("Before filter\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n\n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
+		//printf("distance between (%f,%f,%f) and (%f,%f,%f) = %f\n",org.x,org.y,org.z,self.center.x,self.center.y,self.center.z,distance);
+		//Filter results with additional check	
+		//printf("INTERSECT: maxDist for xID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,maxDist);
+		if(distance <= optixLaunchParams.distRadius)//selfs.rad)//
+		{
+		//printf("INTERSECT: distance between xID = %d: (%f,%f,%f) and primID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
+		//printf("\n\nAfter 1st filter:\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) \n\t dist = %f maxDist = %f \n", 
+			//xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance,maxDist);
+			optixLaunchParams.frameBuffer[xID*k].numNeighbors += 1;
+			if(distance < maxDist)
+			{				
+				//printf("Found neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);		
+				int q=0, w=0;
+				for(; q<k; q++){
+				//printf("INTERSECT q loop: maxDist for xID = %d: (%f,%f,%f) = %f\n\t Neighbor %d's dist = %f\n\n",xID,org.x,org.y,org.z,maxDist,q,optixLaunchParams.frameBuffer[xID*k+q].dist);
+					if(distance > optixLaunchParams.frameBuffer[xID*k+q].dist)
+						break;
+				}
+				for(; w<q-1; w++){
+					optixLaunchParams.frameBuffer[xID*k+w].dist  = optixLaunchParams.frameBuffer[xID*k+w+1].dist;
+					optixLaunchParams.frameBuffer[xID*k+w].ind  = optixLaunchParams.frameBuffer[xID*k+w+1].ind;
+				  }
+				  optixLaunchParams.frameBuffer[xID*k+w].dist = distance;
+				  optixLaunchParams.frameBuffer[xID*k+w].ind = primID;
+			}
+		}	
+	}
+
   
-  const vec3f org  = optixGetWorldRayOrigin();
-  const vec3f dir  = optixGetWorldRayDirection();
-  float hit_t      = optixGetRayTmax();
-  const float tmin = optixGetRayTmin();
-
-  const vec3f oc = org - self.sphere.center;
-  // printf("ctx %f %f %f\n",
-  //        self.sphere.center.x,
-  //        self.sphere.center.y,
-  //        self.sphere.center.z);
-         
-  // return;
-  const float a = dot(dir,dir);
-  const float b = dot(oc, dir);
-  const float c = dot(oc, oc) - self.sphere.radius * self.sphere.radius;
-  const float discriminant = b * b - a * c;
-  
-  if (discriminant < 0.f) return;
-
-  {
-    float temp = (-b - sqrtf(discriminant)) / a;
-    if (temp < hit_t && temp > tmin) 
-      hit_t = temp;
-  }
-      
-  {
-    float temp = (-b + sqrtf(discriminant)) / a;
-    if (temp < hit_t && temp > tmin) 
-      hit_t = temp;
-  }
-  if (hit_t < optixGetRayTmax()) {
-    optixReportIntersection(hit_t, 0);
-  }
-}
-
-OPTIX_INTERSECT_PROGRAM(MetalSpheres)()
-{ intersectProg<MetalSpheresGeom>(); }
-
-OPTIX_INTERSECT_PROGRAM(LambertianSpheres)()
-{ intersectProg<LambertianSpheresGeom>(); }
-
-OPTIX_INTERSECT_PROGRAM(DielectricSpheres)()
-{ intersectProg<DielectricSpheresGeom>(); }
+}	
 
 
-// ==================================================================
-// plumbing for closest hit, templated over geometry type so we can
-// re-use the same code for different materials
-// ==================================================================
-
-// ----------- sphere+material -----------
-template<typename SpheresGeomType>
-inline __device__
-void closestHitSpheres()
-{
-  // printf("chsphere\n"); return;
-  const int primID = optixGetPrimitiveIndex();
-  const auto &self
-    = owl::getProgramData<SpheresGeomType>().prims[primID];
-  
-  PerRayData &prd = owl::getPRD<PerRayData>();
-
-  const vec3f org   = optixGetWorldRayOrigin();
-  const vec3f dir   = optixGetWorldRayDirection();
-  const float hit_t = optixGetRayTmax();
-  const vec3f hit_P = org + hit_t * dir;
-  const vec3f N     = (hit_P-self.sphere.center);
-
-  prd.out.scatterEvent
-    = scatter(self.material,
-              hit_P,N,
-              prd)
-    ? rayGotBounced
-    : rayGotCancelled;
-}
-
-// ----------- "box+material" -----------
-template<typename BoxesGeomType>
-inline __device__
-void closestHitBoxes()
-{
-  // printf("chbox\n");
-  // return;
-  const auto &self
-    = owl::getProgramData<BoxesGeomType>();
-  PerRayData &prd = owl::getPRD<PerRayData>();
-
-  // ID of the triangle we've hit:
-  const int primID = optixGetPrimitiveIndex();
-  printf("CLOSEST hit %d\n\t vertex x %f y %f z %f\n",primID,self.vertex[primID].x, self.vertex[primID].y, self.vertex[primID].z);
-
-  // there's 12 tris per box:
-  const int materialID = primID / 12;
-  
-  const auto &material
-    = self.perBoxMaterial[materialID];
-
-  const vec3i index  = self.index[primID];
-  const vec3f &A     = self.vertex[index.x];
-  const vec3f &B     = self.vertex[index.y];
-  const vec3f &C     = self.vertex[index.z];
-  const vec3f N      = normalize(cross(B-A,C-A));
-
-  const vec3f org   = optixGetWorldRayOrigin();
-  const vec3f dir   = optixGetWorldRayDirection();
-  const float hit_t = optixGetRayTmax();
-  const vec3f hit_P = org + hit_t * dir;
-
-  prd.out.scatterEvent
-    = scatter(material,
-              hit_P,N,
-              prd)
-    ? rayGotBounced
-    : rayGotCancelled;
-}
-
-// ==================================================================
-// actual closest-hit program instantiations for geom+material types
-// ==================================================================
-
-// ---------------------- spheres ----------------------
-OPTIX_CLOSEST_HIT_PROGRAM(MetalSpheres)()
-{ closestHitSpheres<MetalSpheresGeom>(); }
-OPTIX_CLOSEST_HIT_PROGRAM(LambertianSpheres)()
-{ closestHitSpheres<LambertianSpheresGeom>(); }
-OPTIX_CLOSEST_HIT_PROGRAM(DielectricSpheres)()
-{ closestHitSpheres<DielectricSpheresGeom>(); }
-
-// ---------------------- boxes ----------------------
-OPTIX_CLOSEST_HIT_PROGRAM(MetalBoxes)()
-{ closestHitBoxes<MetalBoxesGeom>(); }
-OPTIX_CLOSEST_HIT_PROGRAM(LambertianBoxes)()
-{ closestHitBoxes<LambertianBoxesGeom>(); }
-OPTIX_CLOSEST_HIT_PROGRAM(DielectricBoxes)()
-{ closestHitBoxes<DielectricBoxesGeom>(); }
-
-
-
-
-
-// ==================================================================
-// miss and raygen
-// ==================================================================
-
-inline __device__
-vec3f missColor(const Ray &ray)
-{
-  const vec2i pixelID = owl::getLaunchIndex();
-
-  const vec3f rayDir = normalize(ray.direction);
-  const float t = 0.5f*(rayDir.y + 1.0f);
-  const vec3f c = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
-  return c;
-}
-
-OPTIX_MISS_PROGRAM(miss)()
-{
-  /* nothing to do */
-}
-
-
-
-inline __device__
-vec3f tracePath(const RayGenData &self,
-                owl::Ray &ray, PerRayData &prd)
-{
-  vec3f attenuation = 1.f;
-  
-  /* iterative version of recursion, up to depth 50 */
-  for (int depth=0;depth<50;depth++) {
-    prd.out.scatterEvent = rayDidntHitAnything;
-    owl::traceRay(/*accel to trace against*/self.world,
-                  /*the ray to trace*/ ray,
-                  /*prd*/prd);
-
-    
-    if (prd.out.scatterEvent == rayDidntHitAnything)
-      /* ray got 'lost' to the environment - 'light' it with miss
-         shader */
-      return attenuation * missColor(ray);
-    else if (prd.out.scatterEvent == rayGotCancelled)
-      return vec3f(0.f);
-
-    else { // ray is still alive, and got properly bounced
-      attenuation *= prd.out.attenuation;
-      ray = owl::Ray(/* origin   : */ prd.out.scattered_origin,
-                     /* direction: */ prd.out.scattered_direction,
-                     /* tmin     : */ 1e-3f,
-                     /* tmax     : */ 1e10f);
-    }
-  }
-  // recursion did not terminate - cancel it
-  return vec3f(0.f);
-}
 
 OPTIX_RAYGEN_PROGRAM(rayGen)()
 {
+
   const RayGenData &self = owl::getProgramData<RayGenData>();
-  const vec2i pixelID = owl::getLaunchIndex();
+  vec3f color = 0.f;  
+  int xID = optixGetLaunchIndex().x;
+  int id = optixLaunchParams.spheres[optixGetLaunchIndex().x].index;
+  //optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors = 0;
   
-  const int pixelIdx = pixelID.x+self.fbSize.x*(self.fbSize.y-1-pixelID.y);
-
-  PerRayData prd;
-  prd.random.init(pixelID.x,pixelID.y);
-  
-  vec3f color = 0.f;
-  for (int sampleID=0;sampleID<NUM_SAMPLES_PER_PIXEL;sampleID++) {
-    owl::Ray ray;
-    
-    const vec2f pixelSample(prd.random(),prd.random());
-    const vec2f screen
-      = (vec2f(pixelID)+pixelSample)
-      / vec2f(self.fbSize);
-    const vec3f origin = self.camera.origin // + lens_offset
-      ;
-    const vec3f direction
-      = self.camera.lower_left_corner
-      + screen.u * self.camera.horizontal
-      + screen.v * self.camera.vertical
-      - self.camera.origin;
-    
-    ray.origin = origin;
-    ray.direction = normalize(direction);
-
-    color += tracePath(self, ray, prd);
+  //Only launch rays if the point hasn't found k nearest neighbors yet. We use xID*k so that point 0 has neighbors from 0 to k-1 etc..
+  if(optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors < optixLaunchParams.k)
+  {
+  	//printf("RAYGEN: Launching ray for id = %d xID = %d Point[xID] = (%f,%f,%f) numNeighbors = %d\n",id,xID,optixLaunchParams.spheres[xID].center.x,optixLaunchParams.spheres[xID].center.y,optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors);
+		optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors = 0;
+		owl::Ray ray(optixLaunchParams.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
+ 	 	owl::traceRay(self.world, ray, color);
   }
-    
-  self.fbPtr[pixelIdx]
-    = owl::make_rgba(color * (1.f / NUM_SAMPLES_PER_PIXEL));
+  
+  //If ray still hasn't found k nearest neighbors, write 0 to frameBuffer[id*optixLaunchParams.k].foundKNN
+  
+  
+	
+	//printf("RAYGEN: Point (%f,%f,%f) | numNeighs = %d\n",optixLaunchParams.spheres[xID].center.x, optixLaunchParams.spheres[xID].center.y, optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors);
+	//printf("Intersections for %d: %d\n", xID, intersections);
+	
+  
 }
-
-
