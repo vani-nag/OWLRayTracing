@@ -35,7 +35,6 @@ namespace owl {
   // ==================================================================
   struct Sphere {
     vec3f center;
-    int index; //can't use xID with multiple calls
   };
 
  

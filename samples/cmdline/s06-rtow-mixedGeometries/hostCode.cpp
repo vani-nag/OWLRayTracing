@@ -100,7 +100,7 @@ int main(int ac, char **argv)
 	vec3f org = vec3f(vect.at(0),vect.at(1),vect.at(2));
 
 	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
-		Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2)),j});
+		Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2))});
 
 	//Init neighbors array
 	for(int j=0; j<Spheres.size(); j++){
