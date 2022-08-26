@@ -77,13 +77,15 @@ int main(int ac, char **argv)
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  while(getline(myfile, line)) 
+  int count = 434874*3;
+  while(getline(myfile, line) && count > 0) 
 	{
 	  std::stringstream ss(line);
 	  float i;
 	  while (ss >> i)
 	  {
       vect.push_back(i);
+      count--;
       if (ss.peek() == ',')
           ss.ignore();
 	  }
@@ -103,13 +105,14 @@ int main(int ac, char **argv)
 	//Init neighbors array
 	for(int j=0; j<Spheres.size(); j++){
     		for(int i = 0; i < knn; i++)
-		  neighbors.push_back(Neigh{-1,FLOAT_MAX,0});
+		  neighbors.push_back(Neigh{-1,FLOAT_MAX, knn});
   }
   
 		
 	
-	//Frame Buffer -- just one thread for a single query point
+	//Frame Buffer -- x coordinate dictates number of paralell rays
 	vec2i fbSize(Spheres.size(),1);
+
 
   LOG_OK(" num spheres: " << Spheres.size());
 
@@ -273,8 +276,8 @@ int main(int ac, char **argv)
 	
 	auto start = std::chrono::steady_clock::now();
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-	while(!foundKNN)
-	{
+	//while(!foundKNN)
+	//{
 		cout<<"\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
 		//auto start = std::chrono::steady_clock::now();	
 		
@@ -289,18 +292,18 @@ int main(int ac, char **argv)
 		foundKNN = 1;
 		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
 		std::ofstream outfile;
-		outfile.open("res_rtx.txt");
+		outfile.open("res_rtx.csv");
 		for(int j=0; j<Spheres.size(); j++)
 		{
 			
 		
-			outfile<<"Point ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
+			//outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
 			for(int i = 0; i < knn; i++)          
-				outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';  
+				outfile<<j<<","<<fb[j*knn+i].ind<<','<<fb[j*knn+i].dist<<'\n'; 
 			
-			if(fb[j*knn].numNeighbors < knn)
+			if(fb[j*knn].numNeighbors > 0)
 			{
-				cout<<"Neighbors less than k at j = "<<j<<'\n';
+				cout<<fb[j*knn].numNeighbors<<" neighbors at j = "<<j<<'\n';
 				foundKNN = 0;
 				//updatedSpheres.push_back(Spheres.at(j));
 			}
@@ -321,7 +324,7 @@ int main(int ac, char **argv)
 		outfile.close();
 		
 		
-	}
+	//}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   std::cout << "True KNN time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
