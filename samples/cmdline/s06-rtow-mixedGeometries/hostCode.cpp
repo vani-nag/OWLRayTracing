@@ -77,7 +77,7 @@ int main(int ac, char **argv)
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  int count = 434874*3;
+  int count = 30000*3;
   while(getline(myfile, line) && count > 0) 
 	{
 	  std::stringstream ss(line);
@@ -276,18 +276,20 @@ int main(int ac, char **argv)
 	
 	auto start = std::chrono::steady_clock::now();
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-	//while(!foundKNN)
-	//{
+	while(!foundKNN)
+	{
 		cout<<"\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
-		//auto start = std::chrono::steady_clock::now();	
-		
+		//auto start = std::chrono::steady_clock::now();
+
+		/*Reset framebuffer	-- can't do, cuz then each round will have all points
+		frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]), neighbors.size(), neighbors.data());                    
+		owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);*/
 		owlAsyncLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
 		
 		//auto end = std::chrono::steady_clock::now();
 		//auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 		//std::cout << "Core points time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
 		fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
-		
 
 		foundKNN = 1;
 		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
@@ -295,15 +297,14 @@ int main(int ac, char **argv)
 		outfile.open("res_rtx.csv");
 		for(int j=0; j<Spheres.size(); j++)
 		{
-			
-		
 			//outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
-			for(int i = 0; i < knn; i++)          
-				outfile<<j<<","<<fb[j*knn+i].ind<<','<<fb[j*knn+i].dist<<'\n'; 
+			//for(int i = 0; i < knn; i++)          
+				//outfile<<j<<","<<fb[j*knn+i].ind<<','<<fb[j*knn+i].dist<<'\n'; 
 			
 			if(fb[j*knn].numNeighbors > 0)
 			{
-				cout<<fb[j*knn].numNeighbors<<" neighbors at j = "<<j<<'\n';
+				if(j == 29974)
+					cout<<"HOST: numNeighbors["<<j<<"] = "<<fb[j*knn].numNeighbors<<'\n';
 				foundKNN = 0;
 				//updatedSpheres.push_back(Spheres.at(j));
 			}
@@ -324,7 +325,7 @@ int main(int ac, char **argv)
 		outfile.close();
 		
 		
-	//}
+	}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   std::cout << "True KNN time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
