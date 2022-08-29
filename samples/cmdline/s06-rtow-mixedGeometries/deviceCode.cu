@@ -17,6 +17,7 @@
 // #include "deviceCode.h"
 #include "GeomTypes.h"
 #include <optix_device.h>
+#include<bits/stdc++.h>
 // here
 //#include</home/min/a/nagara16/owl/owl/include/owl/common/parallel/parallel_for.h>
 
@@ -70,95 +71,111 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	//ID of the ray
 	int xID = optixGetLaunchIndex().x;
 	
-	//The number of neighbors -- as sepcified by the user
+	//The number of neighbors as sepcified by the user
 	int k = optixLaunchParams.k;
 	
-	//Count number of intersections
-	intersections += 1;
-	
-	//Access the array of spheres
-	const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
-	//printf("INTERSECT: radius = %f\n",selfs.rad);
-	
-	//Access intersected sphere using its ID
-	Sphere self = selfs.prims[primID];
-	
-  	//int xID = selfs.prims[optixGetLaunchIndex().x].index;
-  	//printf("INTERSECT: xID = %d and primID = %d\n",xID,primID);
-  	//printf("xID = %d and optixGetLaunchIndex().x = %d\n",xID, optixGetLaunchIndex().x);
-	  //int xID = optixGetLaunchIndex().x;
-	  
-	/*
-	The frameBuffer is arranged as: [0..k-1, k..2k-1, 2k..3k-1], where neighbors of sphere 0 are stored at [0..k-1], sphere 1 at [k..2k-1] etc..
-	The last element for each subgroup contains the neighbor at the maximum distance. Ex: for sphere 0, sphere k-1 is the most distant neighbor; for sphere 1, sphere 2k-1 etc.. 
-	*/
-	float maxDist = optixLaunchParams.frameBuffer[xID*k+k-1].dist;
-
-	//Avoid self-intersections where xID == primID as it will always have distance = 0
-	if(xID != primID)
+	//Check if we have already processed this sphere in a previous iteration. check == 1 means we've seen it before
+	int check = 0;
+	for(int i = 0; i < k; i++)
 	{
-		//Get coordinates of center of sphere (point in the original dataset)
-		const vec3f org = optixGetWorldRayOrigin();
-		float x,y,z;
+		if(optixLaunchParams.frameBuffer[xID*k+i].ind == primID)
+		{
+			check = 1;
+			break;
+		}
+	}
+	
+	if(check == 0)
+	{
+		//Count number of intersections
+		intersections += 1;
 		
-		//Get x2-x1, y2-y1, z2-z1
-		//Calculate Euclidean distance between ray and intersected object
-		x = self.center.x - org.x;
-		y = self.center.y - org.y;
-		z = self.center.z - org.z;
-		float distance = std::sqrt((x*x) + (y*y) + (z*z));
+		//Access the array of spheres
+		const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
+		//printf("INTERSECT: radius = %f\n",selfs.rad);
 		
-		//printf("Before filter\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n\n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
-		//printf("distance between (%f,%f,%f) and (%f,%f,%f) = %f\n",org.x,org.y,org.z,self.center.x,self.center.y,self.center.z,distance);
-		//Filter results with additional check	
-		//printf("INTERSECT: maxDist for xID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,maxDist);
+		//Access intersected sphere using its ID
+		Sphere self = selfs.prims[primID];
 		
+			
+			//int xID = selfs.prims[optixGetLaunchIndex().x].index;
+			//printf("INTERSECT: xID = %d and primID = %d\n",xID,primID);
+			//printf("xID = %d and optixGetLaunchIndex().x = %d\n",xID, optixGetLaunchIndex().x);
+			//int xID = optixGetLaunchIndex().x;
+			
 		/*
-		Additional level of testing to ensure that the distance between the 2 sphere centers (points in the original dataset) is within specified limit 
-		-- can we remove for true knn?
+		The frameBuffer is arranged as: [0..k-1, k..2k-1, 2k..3k-1], where neighbors of sphere 0 are stored at [0..k-1], sphere 1 at [k..2k-1] etc..
+		The last element for each subgroup contains the neighbor at the maximum distance. Ex: for sphere 0, sphere k-1 is the most distant neighbor; for sphere 1, sphere 2k-1 etc.. 
 		*/
+		float maxDist = optixLaunchParams.frameBuffer[xID*k+k-1].dist;
 
+		//Avoid self-intersections where xID == primID as it will always have distance = 0
+		if(xID != primID)
+		{
+			//Get coordinates of center of sphere (point in the original dataset)
+			const vec3f org = optixGetWorldRayOrigin();
+			float x,y,z;
 			
-		//if(distance <= optixLaunchParams.distRadius)//selfs.rad)//
-		//{
+			//Get x2-x1, y2-y1, z2-z1
+			//Calculate Euclidean distance between ray and intersected object
+			x = self.center.x - org.x;
+			y = self.center.y - org.y;
+			z = self.center.z - org.z;
+			float distance = std::sqrt((x*x) + (y*y) + (z*z));
 			
-			//printf("INTERSECT: distance between xID = %d: (%f,%f,%f) and primID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
-			//printf("\n\nAfter 1st filter:\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) \n\t dist = %f maxDist = %f \n", 
-			//xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance,maxDist);
+			//printf("Before filter\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n\n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
+			//printf("distance between (%f,%f,%f) and (%f,%f,%f) = %f\n",org.x,org.y,org.z,self.center.x,self.center.y,self.center.z,distance);
+			//Filter results with additional check	
+			//printf("INTERSECT: maxDist for xID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,maxDist);
+			
+			/*
+			Additional level of testing to ensure that the distance between the 2 sphere centers (points in the original dataset) is within specified limit 
+			-- can we remove for true knn?
+			*/
 
-			//if(xID == 0)
-  				  //printf("INTERSECT: Numneighbors for %d = %d \n\t maxDist = %f | distance = %f\n",xID, optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors, maxDist, distance);
-			//Check if distance to currently intersceted sphere is less than the max we have seen so far
-			if(distance < maxDist)
-			{		
-				//Smaller than max distance, so it will be a new neighbor
-				if(optixLaunchParams.frameBuffer[xID*k].numNeighbors > 0)
-					optixLaunchParams.frameBuffer[xID*k].numNeighbors -= 1;	
-				//if(xID == 29974)
-					//printf("numNeighbors[%d] = %d\n",xID*k, optixLaunchParams.frameBuffer[xID*k].numNeighbors);
 				
+			//if(distance <= optixLaunchParams.distRadius)//selfs.rad)//
+			//{
 				
-				//printf("Found neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);		
-				int q=0, w=k-1;
-				for(; q<k; q++)
-				{
-					//Need to figure out where to insert the current point
-					if(distance < optixLaunchParams.frameBuffer[xID*k+q].dist)
+				//printf("INTERSECT: distance between xID = %d: (%f,%f,%f) and primID = %d: (%f,%f,%f) = %f\n",xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);
+				//printf("\n\nAfter 1st filter:\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) \n\t dist = %f maxDist = %f \n", 
+				//xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance,maxDist);
+
+				//if(xID == 0)
+						  //printf("INTERSECT: Numneighbors for %d = %d \n\t maxDist = %f | distance = %f\n",xID, optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors, maxDist, distance);
+				//Check if distance to currently intersceted sphere is less than the max we have seen so far
+				if(distance < maxDist)
+				{		
+					//Smaller than max distance, so it will be a new neighbor
+					if(optixLaunchParams.frameBuffer[xID*k].numNeighbors > 0)
+						optixLaunchParams.frameBuffer[xID*k].numNeighbors -= 1;	
+					//if(xID == 29974)
+						//printf("numNeighbors[%d] = %d\n",xID*k, optixLaunchParams.frameBuffer[xID*k].numNeighbors);
+					
+					
+					//printf("Found neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) dist = %f \n", xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance);		
+					int q=0, w=k-1;
+					for(; q<k; q++)
 					{
-						//if(xID == 6)
-							//printf("Intersect distance = %f | frameBuffer distance = %f | q = %d\n", distance, optixLaunchParams.frameBuffer[xID*k+q].dist, q);
-						break;
+						//handle frameBuffer values from previous iterations: if the distance and index of neighbor is same => have already seen this before  
+						//Need to figure out where to insert the current point
+						if(distance < optixLaunchParams.frameBuffer[xID*k+q].dist)
+						{
+							//if(xID == 6)
+								//printf("Intersect distance = %f | frameBuffer distance = %f | q = %d\n", distance, optixLaunchParams.frameBuffer[xID*k+q].dist, q);
+							break;
+						}
 					}
+					for(; w>q; w--)
+					{
+						optixLaunchParams.frameBuffer[xID*k+w].dist = optixLaunchParams.frameBuffer[xID*k+w-1].dist;
+						optixLaunchParams.frameBuffer[xID*k+w].ind = optixLaunchParams.frameBuffer[xID*k+w-1].ind;
+					}
+					optixLaunchParams.frameBuffer[xID*k+w].dist = distance;
+					optixLaunchParams.frameBuffer[xID*k+w].ind = primID;
 				}
-				for(; w>q; w--)
-				{
-					optixLaunchParams.frameBuffer[xID*k+w].dist = optixLaunchParams.frameBuffer[xID*k+w-1].dist;
-					optixLaunchParams.frameBuffer[xID*k+w].ind = optixLaunchParams.frameBuffer[xID*k+w-1].ind;
-				}
-				optixLaunchParams.frameBuffer[xID*k+w].dist = distance;
-				optixLaunchParams.frameBuffer[xID*k+w].ind = primID;
-			}
-		//}	
+			//}	
+		}
 	}
 }	
 

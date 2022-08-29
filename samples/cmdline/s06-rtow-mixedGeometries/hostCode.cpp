@@ -77,7 +77,7 @@ int main(int ac, char **argv)
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  int count = 30000*3;
+  int count = 434874*3;
   while(getline(myfile, line) && count > 0) 
 	{
 	  std::stringstream ss(line);
