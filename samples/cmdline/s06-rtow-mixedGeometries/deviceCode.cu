@@ -80,6 +80,8 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	{
 		if(optixLaunchParams.frameBuffer[xID*k+i].ind == primID)
 		{
+			//if(xID == 6)
+				//printf("INTERSECT: Already intersected %d\n",primID); 
 			check = 1;
 			break;
 		}
@@ -141,15 +143,20 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 				//printf("\n\nAfter 1st filter:\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) \n\t dist = %f maxDist = %f \n", 
 				//xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance,maxDist);
 
-				//if(xID == 0)
+				//if(xID == 6)
 						  //printf("INTERSECT: Numneighbors for %d = %d \n\t maxDist = %f | distance = %f\n",xID, optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors, maxDist, distance);
 				//Check if distance to currently intersceted sphere is less than the max we have seen so far
 				if(distance < maxDist)
 				{		
 					//Smaller than max distance, so it will be a new neighbor
 					if(optixLaunchParams.frameBuffer[xID*k].numNeighbors > 0)
-						optixLaunchParams.frameBuffer[xID*k].numNeighbors -= 1;	
-					//if(xID == 29974)
+						optixLaunchParams.frameBuffer[xID*k].numNeighbors -= 1;
+					
+					//Weirdness tester
+					//optixLaunchParams.frameBuffer[0].numNeighbors =0;
+					//optixLaunchParams.frameBuffer[5].numNeighbors =0;	
+					
+					//if(xID == 0)
 						//printf("numNeighbors[%d] = %d\n",xID*k, optixLaunchParams.frameBuffer[xID*k].numNeighbors);
 					
 					
@@ -190,17 +197,16 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   int knn = optixLaunchParams.k;
   //optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors = 0;
 
-  if(xID == 29974)
-	printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
+  //if(xID == 29974)
+		//printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
   
   //Only launch rays if the point hasn't found k nearest neighbors yet. We use xID*k so that point 0 has neighbors from 0 to k-1 etc..
   if(optixLaunchParams.frameBuffer[xID*knn].numNeighbors > 0)
   {
-  	//printf("RAYGEN: Launching ray for id = %d xID = %d Point[xID] = (%f,%f,%f) numNeighbors = %d\n",id,xID,optixLaunchParams.spheres[xID].center.x,optixLaunchParams.spheres[xID].center.y,optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[id*optixLaunchParams.k].numNeighbors);
+  	//printf("RAYGEN: Launching ray for Point[%d] = (%f,%f,%f) numNeighbors = %d\n",xID,optixLaunchParams.spheres[xID].center.x,optixLaunchParams.spheres[xID].center.y,optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
 
 		//printf("optixLaunchParams.frameBuffer[%d].dist = %f\n",xID,optixLaunchParams.frameBuffer[xID].dist);
 
-		optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].ind = -1;
 		owl::Ray ray(optixLaunchParams.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
  	 	owl::traceRay(self.world, ray, color);
   }
@@ -213,12 +219,13 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	//printf("RAYGEN: Point (%f,%f,%f) | numNeighs = %d\n",optixLaunchParams.spheres[xID].center.x, optixLaunchParams.spheres[xID].center.y, optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
 	//printf("Intersections for %d: %d\n", xID, intersections);
 	
-	if(xID == 29974)
+	optixLaunchParams.frameBuffer[0].numNeighbors = 0;
+	/*if(xID == 6)
 	{
-		//printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
+		printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
 		for(int i=0;i<knn;i++)
 			printf("optixLaunchParams.frameBuffer[%d].dist = %f\n", xID*knn+i, optixLaunchParams.frameBuffer[xID*knn+i].dist);
-	}
+	}*/
 	
 	
   

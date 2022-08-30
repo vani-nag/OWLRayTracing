@@ -284,174 +284,46 @@ int main(int ac, char **argv)
 		/*Reset framebuffer	-- can't do, cuz then each round will have all points
 		frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]), neighbors.size(), neighbors.data());                    
 		owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);*/
-		owlAsyncLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
+		owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
 		
 		//auto end = std::chrono::steady_clock::now();
 		//auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 		//std::cout << "Core points time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
 		fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
+		//std::cout<<"1's neighs: "<<fb[5].numNeighbors<<'\n';
 
 		foundKNN = 1;
 		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
-		std::ofstream outfile;
-		outfile.open("res_rtx.csv");
+		//std::ofstream outfile;
+		//outfile.open("res_rtx.csv");
 		for(int j=0; j<Spheres.size(); j++)
 		{
 			//outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
 			//for(int i = 0; i < knn; i++)          
 				//outfile<<j<<","<<fb[j*knn+i].ind<<','<<fb[j*knn+i].dist<<'\n'; 
-			
+			//cout<<"HOST: numNeighbors["<<j*knn<<"] = "<<fb[j*knn].numNeighbors<<'\n';
 			if(fb[j*knn].numNeighbors > 0)
 			{
-				if(j == 29974)
-					cout<<"HOST: numNeighbors["<<j<<"] = "<<fb[j*knn].numNeighbors<<'\n';
+				//if(j == 29974)
+				//cout<<"HOST: numNeighbors["<<j*knn<<"] = "<<fb[j*knn].numNeighbors<<'\n';
 				foundKNN = 0;
-				//updatedSpheres.push_back(Spheres.at(j));
+				radius *= 2;
+				owlGeomSet1f(SpheresGeom,"rad",radius);
+				owlParamsSet1f(lp,"distRadius",radius);
+				//start_rebuild = std::chrono::steady_clock::now();
+				owlGroupRefitAccel(spheresGroup);
+				owlGroupRefitAccel(world); 
+				break;
+				//end_rebuild = std::chrono::steady_clock::now();
+				//elapsed_rebuild = std::chrono::duration_cast<std::chrono::microseconds>(end_rebuild - start_rebuild);
+				//std::cout << "\n\n\n\nRe-Build time: " << elapsed_rebuild.count()/1000000.0 << " seconds." << std::endl;
 			}
-			
-		}
-		if(foundKNN == 0)
-		{
-			radius *= 2;
-			owlGeomSet1f(SpheresGeom,"rad",radius);
-			owlParamsSet1f(lp,"distRadius",radius);
-			//start_rebuild = std::chrono::steady_clock::now();
-			owlGroupRefitAccel(spheresGroup);
-			owlGroupRefitAccel(world); 
-			//end_rebuild = std::chrono::steady_clock::now();
-			//elapsed_rebuild = std::chrono::duration_cast<std::chrono::microseconds>(end_rebuild - start_rebuild);
-			//std::cout << "\n\n\n\nRe-Build time: " << elapsed_rebuild.count()/1000000.0 << " seconds." << std::endl;
-		}
-		outfile.close();
-		
-		
+		//outfile.close();
+		}	
 	}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   std::cout << "True KNN time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
-
-	
-		
-		
-		///////////////////////////////////////////////////////////Call-2////////////////////////////////////////////////////////////////////////////////
-		
-		//frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]), neighbors.size(), neighbors.data());
-                            
-   //updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),updatedSpheres.size(),updatedSpheres.data());
-                            
-	//owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);
-
-	
-
-		//update spheres
-		/*cout<<"\n\nRound 2 \nUpdated spheres: \n";
-		for(int j = 0; j < updatedSpheres.size(); j++) 
-			cout<<"("<<updatedSpheres.at(j).center.x<<", "<<updatedSpheres.at(j).center.y<<", "<<updatedSpheres.at(j).center.z<<") "<<'\t'<<"Index = "<< updatedSpheres.at(j).index<<'\n';
-		cout<<"Original spheres: \n";
-		for(int j = 0; j < Spheres.size(); j++) 
-			cout<<"("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<") "<<'\t'<<"Index = "<<Spheres.at(j).index<<'\n';
-
-
-		if(foundKNN == 0)
-		{
-			frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]),
-                            neighbors.size(), neighbors.data());
-                            
-			updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),
-							updatedSpheres.size(),updatedSpheres.data());
-		                          
-
-			
-
-		  	radius *= 2;
-		  	owlGeomSet1f(SpheresGeom,"rad",radius); 
-			//owlGeomSetBuffer(SpheresGeom,"prims",SpheresBuffer);
-			owlParamsSet1f(lp,"distRadius",radius);
-			
-			//Re-fit
-			//owlGroupBuildAccel(spheresGroup);
-  		  //  owlGroupBuildAccel(world);
-
-			owlGroupRefitAccel(spheresGroup);
-  		    owlGroupRefitAccel(world);
-  		
-			//Update launch params, rayGen vars
-			//owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);
-			owlParamsSetBuffer(lp,"spheres",updatedSpheresBuffer);
-			fbSize = vec2i(updatedSpheres.size(),1);
-			owlRayGenSet2i(rayGen,"fbSize",(const owl2i&)fbSize);
-			
-			//Re-build SBT
-			//owlBuildPrograms(context);
-			//owlBuildPipeline(context);
-			//owlBuildSBT(context);
-  		
-  			owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
-			fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
-			tempSpheres = updatedSpheres;
-			updatedSpheres.clear();
-			for(int j=0; j<tempSpheres.size(); j++)
-			{
-				outfile<<"Round 2 \n\nPoint ("<<tempSpheres.at(j).center.x<<", "<<tempSpheres.at(j).center.y<<", "<<tempSpheres.at(j).center.z<<")\n";
-				for(int i = 0; i < knn; i++)          
-				outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';
-				
-				//cout<<"knn = "<<knn<<'\n';
-				if(fb[tempSpheres.at(j).index*knn].numNeighbors < knn)
-				{
-					cout<<"Neighbors less than k at index = "<<tempSpheres.at(j).index<<" numNeighs = "<<fb[tempSpheres.at(j).index*knn].numNeighbors<<'\n';
-					foundKNN = 0;
-					updatedSpheres.push_back(tempSpheres.at(j));
-				}
-			}
-  		}
-  //}
-  
-  
-  		///////////////////////////////////////////////////////////Call-3////////////////////////////////////////////////////////////////////////////////
-		//update spheres
-		/*cout<<"\n\nRound 3 \nUpdated spheres: \n";
-		for(int j = 0; j < updatedSpheres.size(); j++) 
-			cout<<"("<<updatedSpheres.at(j).center.x<<", "<<updatedSpheres.at(j).center.y<<", "<<updatedSpheres.at(j).center.z<<") "<<'\t'<<"Index = "<< updatedSpheres.at(j).index<<'\n';
-		if(foundKNN == 0)
-		{
-			updatedSpheresBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(updatedSpheres[0]),
-		                          updatedSpheres.size(),updatedSpheres.data());
-		  radius *= 20;
-			owlGeomSet1f(SpheresGeom,"rad",radius); 
-			
-			owlGroupRefitAccel(spheresGroup);
-  		owlGroupRefitAccel(world);
-  		
-  		//Update launch params, rayGen vars
-  		owlParamsSetBuffer(lp,"spheres",updatedSpheresBuffer);
-  		fbSize = vec2i(updatedSpheres.size(),1);
-			
-			owlRayGenSet2i    (rayGen,"fbSize",       (const owl2i&)fbSize);
-		  
-		  //Re-build SBT
-  		owlBuildSBT(context);
-  		
-  		owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
-		  fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
-		  tempSpheres = updatedSpheres;
-		  updatedSpheres.clear();
-		  for(int j=0; j<tempSpheres.size(); j++)
-			{
-			
-				outfile<<"Round 3 \n\nPoint ("<<tempSpheres.at(j).center.x<<", "<<tempSpheres.at(j).center.y<<", "<<tempSpheres.at(j).center.z<<")\n";
-				for(int i = 0; i < knn; i++)          
-				  outfile<<fb[j*knn+i].ind<<'\t'<<fb[j*knn+i].dist<<'\n';
-				
-				cout<<"knn = "<<knn<<'\n';
-				if(fb[tempSpheres.at(j).index*knn].numNeighbors < knn)
-			  {
-			  	cout<<"Neighbors less than k at index = "<<tempSpheres.at(j).index<<" numNeighs = "<<fb[tempSpheres.at(j).index*knn].numNeighbors<<'\n';
-			  	foundKNN = 0;
-			  	updatedSpheres.push_back(tempSpheres.at(j));
-			  }
-			}
-  	}*/
 
 
   // ##################################################################
