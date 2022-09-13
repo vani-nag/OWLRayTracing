@@ -1,0 +1,39 @@
+[1;34m#owl.sample(main):  num spheres: 434874
+[0m[1;34m#owl.sample(main): init DONE
+
+[0m[1;34m#owl.sample(main): BUILD prog DONE
+
+[0m[1;34m#owl.sample(main): Geoms and Params DONE
+
+[0mBuild time: 0.006863 seconds.
+[0;34m#owl.sample(main): building SBT ...
+[0m[1;34m#owl.sample(main): everything set up ...
+[0m
+Round: 1 Radius = 0.00014
+Round: 1 Time: 0.029995 seconds
+
+Round: 2 Radius = 0.00028
+Round: 2 Time: 0.003349 seconds
+
+Round: 3 Radius = 0.00056
+Round: 3 Time: 0.004584 seconds
+
+Round: 4 Radius = 0.00112
+Round: 4 Time: 0.003943 seconds
+
+Round: 5 Radius = 0.00224
+Round: 5 Time: 0.003747 seconds
+
+Round: 6 Radius = 0.00448
+Round: 6 Time: 0.006658 seconds
+
+Round: 7 Radius = 0.00896
+Round: 7 Time: 0.004909 seconds
+
+Round: 8 Radius = 0.01792
+Round: 8 Time: 0.006391 seconds
+
+Round: 9 Radius = 0.03584
+Round: 9 Time: 0.009151 seconds
+True KNN time: 0.072797 seconds.
+Total time: 0.07966
