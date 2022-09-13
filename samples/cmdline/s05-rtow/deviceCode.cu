@@ -125,7 +125,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   //Get closest hit triangle's associated circle
   x = self.center.x - org.x;
   y = self.center.y - org.y;
-	z = self.center.z - org.z;
+  z = self.center.z - org.z;
 	
 	//printf("callNum = %d\n",optixLaunchParams.callNum);
 	
@@ -145,46 +145,45 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 		{
 			if(optixLaunchParams.frameBuffer[xID].neighCount >= minPts)
 			{
-				int vstat = find(xID);
+				int xParent = find(xID);
 				if(optixLaunchParams.frameBuffer[primID].neighCount >= minPts)
 				{
-						int ostat = find(primID);
-						
-						    bool repeat;
-								do
+					int primIDParent = find(primID);	
+					bool repeat;
+					do
+					{
+						repeat = false;
+						if (xParent != primIDParent)
+						{
+							int ret;
+							if (xParent < primIDParent)
+							{
+								if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[primIDParent].parent), primIDParent,
+																				xParent)) != primIDParent)
 								{
-									repeat = false;
-									if (vstat != ostat)
-									{
-										int ret;
-										if (vstat < ostat)
-										{
-											if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[ostat].parent), ostat,
-												                                         vstat)) != ostat)
-											{
-												ostat = ret;
-												repeat = true;
-											}
-										}
-										else
-										{
-											if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[vstat].parent), vstat,
-												                                         ostat)) != vstat)
-											{
-												vstat = ret;
-												repeat = true;
-											}
-										}
-									}
-								} while (repeat);
-										
+									primIDParent = ret;
+									repeat = true;
+								}
+							}
+							else
+							{
+								if ((ret = atomicCAS(&(optixLaunchParams.frameBuffer[xParent].parent), xParent,
+																				primIDParent)) != xParent)
+								{
+									xParent = ret;
+									repeat = true;
+								}
+							}
+						}
+					} while (repeat);
+								
 				}
 					
 					
 				//////////////////////////////////////Critical section//////////////////////////////////////////////////////////////////
 				
 				else	
-					 optixLaunchParams.frameBuffer[primID].parent = vstat;
+					 optixLaunchParams.frameBuffer[primID].parent = xParent;
 			}		
 					
 				////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////			
@@ -220,8 +219,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 		/*if(xID == 15790)
 			printf("Neighs = %d\n",optixLaunchParams.frameBuffer[xID].neighCount);
 		if(optixLaunchParams.frameBuffer[xID].neighCount > 100)
-			//atomicAdd(&optixLaunchParams.frameBuffer[xID].counter,optixLaunchParams.frameBuffer[xID].neighCount-100);
-			printf("Neighs = %d\n",optixLaunchParams.frameBuffer[xID].neighCount);*/
+			//atomicAdd(&optixLaunchParams.frameBuffer[xID].counter,optixLaunchParams.frameBuffer[xID].neighCount-100);*/
+			//printf("Neighs[%d] = %d\n",xID,optixLaunchParams.frameBuffer[xID].neighCount);
 		//Update core point
 		//done in intersect implicitly
 	}
@@ -235,7 +234,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 		//printf("Launching %d\n", optixGetLaunchIndex().x);
 		owl::traceRay(self.world, ray, color);
 			
-		//printf("After TraceRay: \n");
+		//printf("After TraceRay: parent[%d] = %d \n",xID,find(xID));
 		/*for(i = 0; i < optixLaunchParams.spheresCount; i++)
 		{
 			printf("Find(%d) = %d\n",i,find(optixLaunchParams.frameBuffer[i].parent));

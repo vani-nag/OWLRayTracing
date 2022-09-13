@@ -95,17 +95,22 @@ int main(int ac, char **av)
   // pre-owl host-side set-up
   // ##################################################################
 
+	int dim = 3;
 	std::string line;
-  std::ifstream myfile;
-	myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/3droad.csv");
-		
+    std::ifstream myfile;
+    myfile.open(av[5]);
+  	//myfile.open("/home/min/a/nagara16/fast-cuda-gpu-dbscan/CUDA_DCLUST_datasets/3D_iono.txt");
+	//myfile.open("/home/min/a/nagara16/ArborX/build/examples/dbscan/porto.txt");
+  //myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/3droad_full.csv");	
   if(!myfile.is_open())
   {
     perror("Error open");
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  while(getline(myfile, line)) 
+  int count = atof(av[1])*dim;
+  //int count=0;
+  while(getline(myfile, line) && count > 0) 
 	{
 	   //std::cout << line << '\n';
 	  std::stringstream ss(line);
@@ -113,7 +118,8 @@ int main(int ac, char **av)
 	  while (ss >> i)
 	  {
       vect.push_back(i);
-			//std::cout << i <<'\n';
+	  count--;
+	  //std::cout << i <<'\n';
       if (ss.peek() == ',')
           ss.ignore();
 	  }
@@ -124,15 +130,30 @@ int main(int ac, char **av)
   // ##################################################################
 
 	//Select minPts,epsilon
-	float radius = 0.01;
-	int minPts = 100;
+	float radius = atof(av[2]);
+	int minPts = atof(av[3]);
+	//cout<<"radius = "<<radius<<"\n minPts = "<<minPts<<'\n';
+	//cout<<"filename = "<<av[4]<<'\n';
 
-	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
+	if(dim == 2)
 	{
-		Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2)),-1});
-		ds.push_back(DisjointSet{j,0,0});
+		for(int i = 0, j = 0; i < vect.size(); i+=2, j+=1)
+		{
+			//Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),0),-1});
+			Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),0),-1});
+			ds.push_back(DisjointSet{j,0,0});
+		}
 	}
-		
+
+	if(dim == 3)
+	{
+		for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
+		{
+			Spheres.push_back(Sphere{vec3f(vect.at(i),vect.at(i+1),vect.at(i+2)),-1});
+			ds.push_back(DisjointSet{j,0,0});
+		}
+
+	}	
 	
 	//Frame Buffer
 	const vec2i fbSize(Spheres.size(),1);
@@ -235,7 +256,7 @@ int main(int ac, char **av)
     SpheresGeom
   };
 
-	auto start_b = std::chrono::steady_clock::now();
+  auto start_b = std::chrono::steady_clock::now();
   OWLGroup spheresGroup
     = owlUserGeomGroupCreate(context,1,userGeoms);
   owlGroupBuildAccel(spheresGroup);
@@ -243,6 +264,8 @@ int main(int ac, char **av)
   OWLGroup world
     = owlInstanceGroupCreate(context,1,&spheresGroup);
   owlGroupBuildAccel(world);
+
+  LOG_OK("Group build DONE\n");
   
   auto end_b = std::chrono::steady_clock::now();
 	auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
@@ -328,9 +351,11 @@ int main(int ac, char **av)
 	// ##################################################################
 		
 	std::ofstream ofile;
-	/*ofile.open("/home/min/a/nagara16/Downloads/owl/build/op_changedCAS.txt", std::ios::out);
-	ofile.close();*/
-	ofile.open("/home/min/a/nagara16/Downloads/owl/build/op_changedCAS.txt", std::ios::app);
+	/*ofile.open("/home/min/a/nagara16/Downloads/owl/build/op.csv", std::ios::out);
+	ofile.close();
+	ofile.open("/home/min/a/nagara16/Downloads/owl/build/op.csv", std::ios::app);*/
+	
+	ofile.open(av[4], std::ios::app);
 	
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
 	auto start1 = std::chrono::steady_clock::now();	
@@ -351,16 +376,21 @@ int main(int ac, char **av)
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 	const DisjointSet *fb = (const DisjointSet*)owlBufferGetPointer(frameBuffer,0);
 	
-	auto tot = (elapsed.count()/1000000.0) + (elapsed_b.count()/1000000.0);
+	auto tot = (elapsed.count()/1000000.0) + (elapsed_b.count()/1000000.0) + (elapsed1.count()/1000000.0);
 	std::cout << "Execution time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
 	std::cout << "Total time = "<< tot <<'\n';
 	//cout<<"Call-2: FrameBuffer in HOST\n";
 	//cout<<"Extra traversals = "<<fb->counter<<'\n';
+	int temp;
+	//ofile << "ind" << '\t'<< "cluster"<< std::endl;
 	/*for(int i = 0; i < Spheres.size(); i++)
 	{
-		ofile << i << '\t'<< find(fb[i].parent,fb)<< std::endl;
+		temp = find(fb[i].parent,fb);
+		
+			ofile << i << '\t'<< temp<< std::endl;
 		//cout<<i<<'\t'<<find(fb[i].parent,fb)<<'\n';
 	}*/
+	
 	ofile << tot << std::endl;
 	
 	
