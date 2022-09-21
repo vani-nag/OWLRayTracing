@@ -1,0 +1,54 @@
+[1;34m#owl.sample(main):  num spheres: 100000
+[0m[1;34m#owl.sample(main): init DONE
+
+[0m[1;34m#owl.sample(main): BUILD prog DONE
+
+[0m[1;34m#owl.sample(main): Geoms and Params DONE
+
+[0mBuild time: 0.003977 seconds.
+[0;34m#owl.sample(main): building SBT ...
+[0m[1;34m#owl.sample(main): everything set up ...
+[0m
+===============================================================================================================
+Round: 1 Radius = 0.4
+POINTS LEFT: 2707
+NUM INTERSECTIONS: 4558554
+Round: 1 Time: 0.011189 seconds
+
+===============================================================================================================
+Round: 2 Radius = 0.8
+POINTS LEFT: 425
+NUM INTERSECTIONS: 9142081
+Round: 2 Time: 0.008259 seconds
+
+===============================================================================================================
+Round: 3 Radius = 1.6
+POINTS LEFT: 119
+NUM INTERSECTIONS: 13733502
+Round: 3 Time: 0.008528 seconds
+
+===============================================================================================================
+Round: 4 Radius = 3.2
+POINTS LEFT: 36
+NUM INTERSECTIONS: 18347685
+Round: 4 Time: 0.011315 seconds
+
+===============================================================================================================
+Round: 5 Radius = 6.4
+POINTS LEFT: 12
+NUM INTERSECTIONS: 22971002
+Round: 5 Time: 0.010523 seconds
+
+===============================================================================================================
+Round: 6 Radius = 12.8
+POINTS LEFT: 1
+NUM INTERSECTIONS: 27611507
+Round: 6 Time: 0.011929 seconds
+
+===============================================================================================================
+Round: 7 Radius = 25.6
+POINTS LEFT: 0
+NUM INTERSECTIONS: 32253989
+Round: 7 Time: 0.007817 seconds
+True KNN time: 0.069659 seconds.
+Total time: 0.073636

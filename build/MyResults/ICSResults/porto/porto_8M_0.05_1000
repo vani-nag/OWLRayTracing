@@ -1,0 +1,15 @@
+[3J[H[2J[ 83%] Built target owl_static
+[100%] Built target sample05-rtow
+[1;34m#owl.sample(main):  num spheres: 8388608
+[0m[1;34m#owl.sample(main): init DONE
+
+[0m[1;34m#owl.sample(main): BUILD prog DONE
+
+[0m[1;34m#owl.sample(main): Geoms and Params DONE
+
+[0m[1;34m#owl.sample(main): Group build DONE
+
+[0mBuild time: 0.12114 seconds.
+Core points time: 34266.9 seconds.
+Execution time: 62010.9 seconds.
+Total time = 96278

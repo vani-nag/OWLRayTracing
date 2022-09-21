@@ -1,0 +1,18 @@
+[1;34m#owl.sample(main):  num spheres: 100000
+[0m[1;34m#owl.sample(main): init DONE
+
+[0m[1;34m#owl.sample(main): BUILD prog DONE
+
+[0m[1;34m#owl.sample(main): Geoms and Params DONE
+
+[0mBuild time: 0.0041 seconds.
+[0;34m#owl.sample(main): building SBT ...
+[0m[1;34m#owl.sample(main): everything set up ...
+[0m
+===============================================================================================================
+Round: 1 Radius = 22.33
+POINTS LEFT: 0
+NUM INTERSECTIONS: 2555460577
+Round: 1 Time: 2.36569 seconds
+True KNN time: 2.36571 seconds.
+Total time: 2.36981

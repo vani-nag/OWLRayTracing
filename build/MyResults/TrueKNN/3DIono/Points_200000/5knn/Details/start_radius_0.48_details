@@ -1,0 +1,72 @@
+[1;34m#owl.sample(main):  num spheres: 200000
+[0m[1;34m#owl.sample(main): init DONE
+
+[0m[1;34m#owl.sample(main): BUILD prog DONE
+
+[0m[1;34m#owl.sample(main): Geoms and Params DONE
+
+[0mBuild time: 0.004212 seconds.
+[0;34m#owl.sample(main): building SBT ...
+[0m[1;34m#owl.sample(main): everything set up ...
+[0m
+===============================================================================================================
+Round: 1 Radius = 0.48
+POINTS LEFT: 3273
+NUM INTERSECTIONS: 12484492
+Round: 1 Time: 0.02304 seconds
+
+===============================================================================================================
+Round: 2 Radius = 0.96
+POINTS LEFT: 796
+NUM INTERSECTIONS: 25003906
+Round: 2 Time: 0.015045 seconds
+
+===============================================================================================================
+Round: 3 Radius = 1.92
+POINTS LEFT: 216
+NUM INTERSECTIONS: 37540791
+Round: 3 Time: 0.015525 seconds
+
+===============================================================================================================
+Round: 4 Radius = 3.84
+POINTS LEFT: 70
+NUM INTERSECTIONS: 50107261
+Round: 4 Time: 0.017296 seconds
+
+===============================================================================================================
+Round: 5 Radius = 7.68
+POINTS LEFT: 12
+NUM INTERSECTIONS: 62712523
+Round: 5 Time: 0.019665 seconds
+
+===============================================================================================================
+Round: 6 Radius = 15.36
+POINTS LEFT: 2
+NUM INTERSECTIONS: 75510153
+Round: 6 Time: 0.04414 seconds
+
+===============================================================================================================
+Round: 7 Radius = 30.72
+POINTS LEFT: 1
+NUM INTERSECTIONS: 88357413
+Round: 7 Time: 0.051503 seconds
+
+===============================================================================================================
+Round: 8 Radius = 61.44
+POINTS LEFT: 1
+NUM INTERSECTIONS: 101204674
+Round: 8 Time: 0.015053 seconds
+
+===============================================================================================================
+Round: 9 Radius = 122.88
+POINTS LEFT: 1
+NUM INTERSECTIONS: 114051936
+Round: 9 Time: 0.014991 seconds
+
+===============================================================================================================
+Round: 10 Radius = 245.76
+POINTS LEFT: 0
+NUM INTERSECTIONS: 127065720
+Round: 10 Time: 0.133633 seconds
+True KNN time: 0.350024 seconds.
+Total time: 0.354236
