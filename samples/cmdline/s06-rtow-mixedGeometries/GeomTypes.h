@@ -24,7 +24,7 @@ namespace owl {
 		int ind;
 		float dist;
 		int numNeighbors;
-		//bool foundKNN;
+		//long long int intersections;
 	}Neigh;
 	
 

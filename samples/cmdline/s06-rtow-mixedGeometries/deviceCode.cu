@@ -74,7 +74,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	//The number of neighbors as sepcified by the user
 	int k = optixLaunchParams.k;
 	
-	//Check if we have already processed this sphere in a previous iteration. check == 1 means we've seen it before
+	//Check if we have already processed this sphere in a previous iteration. If check == 1 means we've seen it before
 	int check = 0;
 	for(int i = 0; i < k; i++)
 	{
@@ -90,7 +90,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	if(check == 0)
 	{
 		//Count number of intersections
-		intersections += 1;
+		//optixLaunchParams.frameBuffer[xID*k].intersections += 1;
 		
 		//Access the array of spheres
 		const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
@@ -219,8 +219,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	//printf("RAYGEN: Point (%f,%f,%f) | numNeighs = %d\n",optixLaunchParams.spheres[xID].center.x, optixLaunchParams.spheres[xID].center.y, optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
 	//printf("Intersections for %d: %d\n", xID, intersections);
 	
-	optixLaunchParams.frameBuffer[0].numNeighbors = 0;
-	/*if(xID == 6)
+	/*
+	if(xID == 6)
 	{
 		printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
 		for(int i=0;i<knn;i++)

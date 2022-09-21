@@ -65,6 +65,13 @@ std::vector<Sphere> updatedSpheres;
 std::vector<Sphere> tempSpheres;
 std::vector<Neigh> neighbors;
 
+/*Command-line args
+argv[1] = input file
+argv[2] = number of points to read from file
+argv[3] = start radius
+argv[4] = 'k' value for knn
+argv[5] = file to write execution time
+*/
 int main(int ac, char **argv)
 {
   std::string line;
@@ -77,7 +84,7 @@ int main(int ac, char **argv)
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  int count = 434874*3;
+  int count = atof(argv[2])*3;
   while(getline(myfile, line) && count > 0) 
 	{
 	  std::stringstream ss(line);
@@ -95,8 +102,8 @@ int main(int ac, char **argv)
   // ##################################################################
 
   //Select minPts,epsilon
-	float radius = atof(argv[2]); //
-	int knn = 5;
+	float radius = atof(argv[3]); //
+	int knn = atof(argv[4]);
 	vec3f org = vec3f(vect.at(0),vect.at(1),vect.at(2));
 
 	for(int i = 0, j = 0; i < vect.size(); i+=3, j+=1)
@@ -274,28 +281,42 @@ int main(int ac, char **argv)
 	//auto start,end,elapsed,start_rebuild, end_rebuild, elapsed_rebuild;
 	const Neigh *fb;
 	
+	//long long int num_intersections = 0;
+	
 	auto start = std::chrono::steady_clock::now();
+	
+	auto round_start = std::chrono::steady_clock::now();
+	auto round_end = std::chrono::steady_clock::now();
+	//auto round_elapsed = std::chrono::steady_clock::now();
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
 	while(!foundKNN)
 	{
-		cout<<"\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
-		//auto start = std::chrono::steady_clock::now();
-
-		/*Reset framebuffer	-- can't do, cuz then each round will have all points
-		frameBuffer = owlManagedMemoryBufferCreate(context,OWL_USER_TYPE(neighbors[0]), neighbors.size(), neighbors.data());                    
-		owlParamsSetBuffer(lp,"frameBuffer",frameBuffer);*/
+		cout<<"\n===============================================================================================================\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
+	
+		round_start = std::chrono::steady_clock::now();
 		owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
 		
-		//auto end = std::chrono::steady_clock::now();
-		//auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		//std::cout << "Core points time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
 		fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
-		//std::cout<<"1's neighs: "<<fb[5].numNeighbors<<'\n';
 
 		foundKNN = 1;
 		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
 		//std::ofstream outfile;
 		//outfile.open("res_rtx.csv");
+		
+		//Counting number of points left after each round
+		/*
+		count=0;
+		for(int j=0; j<Spheres.size(); j++)
+		{
+			num_intersections += fb[j*knn].intersections;
+			if(fb[j*knn].numNeighbors > 0)
+				count++;
+			
+		}
+		std::cout<<"POINTS LEFT: "<<count<<"\nNUM INTERSECTIONS: "<<num_intersections<<'\n';
+		*/
+		
+		//Determine if we need another round
 		for(int j=0; j<Spheres.size(); j++)
 		{
 			//outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
@@ -304,15 +325,17 @@ int main(int ac, char **argv)
 			//cout<<"HOST: numNeighbors["<<j*knn<<"] = "<<fb[j*knn].numNeighbors<<'\n';
 			if(fb[j*knn].numNeighbors > 0)
 			{
-				//if(j == 29974)
-				//cout<<"HOST: numNeighbors["<<j*knn<<"] = "<<fb[j*knn].numNeighbors<<'\n';
 				foundKNN = 0;
 				radius *= 2;
 				owlGeomSet1f(SpheresGeom,"rad",radius);
 				owlParamsSet1f(lp,"distRadius",radius);
 				//start_rebuild = std::chrono::steady_clock::now();
+				/*
 				owlGroupRefitAccel(spheresGroup);
 				owlGroupRefitAccel(world); 
+				*/
+				owlGroupBuildAccel(spheresGroup);
+				owlGroupBuildAccel(world);
 				break;
 				//end_rebuild = std::chrono::steady_clock::now();
 				//elapsed_rebuild = std::chrono::duration_cast<std::chrono::microseconds>(end_rebuild - start_rebuild);
@@ -320,10 +343,26 @@ int main(int ac, char **argv)
 			}
 		//outfile.close();
 		}	
+		//Time per round
+		round_end = std::chrono::steady_clock::now();
+		auto round_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(round_end - round_start);
+		std::cout<<"Round: "<<numRounds<<" Time: "<< round_elapsed.count()/1000000.0 << " seconds"<<'\n';
 	}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   std::cout << "True KNN time: " << elapsed.count()/1000000.0 << " seconds." << std::endl;
+  auto tot = elapsed_b.count()/1000000.0 + elapsed.count()/1000000.0;
+  std::cout << "Total time: " << tot << '\n';
+  
+  //Write time taken to file
+  std::ofstream outfile;
+  outfile.open(argv[5], std::ios::app);
+  if(!outfile.is_open())
+  {
+    perror("Error open");
+    exit(EXIT_FAILURE);
+  }
+  outfile << tot << std::endl;
 
 
   // ##################################################################
