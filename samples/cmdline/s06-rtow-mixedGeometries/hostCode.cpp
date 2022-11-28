@@ -272,12 +272,12 @@ int main(int ac, char **argv)
   LOG_OK("everything set up ...");
 
  
-	std::ofstream ofile;
+	//std::ofstream ofile;
 
 	
 	//ofile.open("/home/min/a/dmandara/owl/build/3droad_5neighs_2rad.csv", std::ios::app);
-	bool foundKNN = 0, flag;
-	int numRounds = 0;
+	bool foundKNN = 0;
+	int numRounds = 0, stop=0;
 	//auto start,end,elapsed,start_rebuild, end_rebuild, elapsed_rebuild;
 	const Neigh *fb;
 	
@@ -289,17 +289,20 @@ int main(int ac, char **argv)
 	auto round_end = std::chrono::steady_clock::now();
 	//auto round_elapsed = std::chrono::steady_clock::now();
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-	while(!foundKNN)
+	while(!foundKNN) //&& (stop==0 | stop==1))
 	{
 		cout<<"\n===============================================================================================================\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
 	
 		round_start = std::chrono::steady_clock::now();
 		owlLaunch2D(rayGen,fbSize.x,fbSize.y,lp);
-		
 		fb = (const Neigh*)owlBufferGetPointer(frameBuffer,0);
 
 		foundKNN = 1;
-		// cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
+		//std::cout<<"Stop = "<<stop<<'\n';
+
+			
+
+		//cout<<"Nearest neighbors"<<'\n'<<"Index"<<'\t'<<"Distance"<<'\n';
 		//std::ofstream outfile;
 		//outfile.open("res_rtx.csv");
 		
@@ -308,7 +311,7 @@ int main(int ac, char **argv)
 		count=0;
 		for(int j=0; j<Spheres.size(); j++)
 		{
-			num_intersections += fb[j*knn].intersections;
+			//num_intersections += fb[j*knn].intersections;
 			if(fb[j*knn].numNeighbors > 0)
 				count++;
 			
@@ -327,15 +330,18 @@ int main(int ac, char **argv)
 			{
 				foundKNN = 0;
 				radius *= 2;
+				/*if(radius > atof(argv[6]))
+				{
+					radius = atof(argv[6]);
+					stop+=1;
+				}*/
 				owlGeomSet1f(SpheresGeom,"rad",radius);
 				owlParamsSet1f(lp,"distRadius",radius);
 				//start_rebuild = std::chrono::steady_clock::now();
-				/*
 				owlGroupRefitAccel(spheresGroup);
 				owlGroupRefitAccel(world); 
-				*/
-				owlGroupBuildAccel(spheresGroup);
-				owlGroupBuildAccel(world);
+				//owlGroupBuildAccel(spheresGroup);
+				//owlGroupBuildAccel(world);
 				break;
 				//end_rebuild = std::chrono::steady_clock::now();
 				//elapsed_rebuild = std::chrono::duration_cast<std::chrono::microseconds>(end_rebuild - start_rebuild);
@@ -344,9 +350,11 @@ int main(int ac, char **argv)
 		//outfile.close();
 		}	
 		//Time per round
+		/*
 		round_end = std::chrono::steady_clock::now();
 		auto round_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(round_end - round_start);
 		std::cout<<"Round: "<<numRounds<<" Time: "<< round_elapsed.count()/1000000.0 << " seconds"<<'\n';
+		*/
 	}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);

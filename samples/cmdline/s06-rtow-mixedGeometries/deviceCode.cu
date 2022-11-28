@@ -74,7 +74,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	//The number of neighbors as sepcified by the user
 	int k = optixLaunchParams.k;
 	
-	//Check if we have already processed this sphere in a previous iteration. If check == 1 means we've seen it before
+	//Check if we have already processed this sphere in a previous iteration. If check == 1, we've seen it before
 	int check = 0;
 	for(int i = 0; i < k; i++)
 	{
