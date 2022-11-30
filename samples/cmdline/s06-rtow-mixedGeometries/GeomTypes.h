@@ -25,6 +25,7 @@ namespace owl {
 		float dist;
 		int numNeighbors;
 		//long long int intersections;
+    bool sparse;
 	}Neigh;
 	
 
@@ -81,6 +82,7 @@ namespace owl {
 		int k;
 		Sphere *spheres;
 		float distRadius;
+    int callNum;
 	};
 
 }
