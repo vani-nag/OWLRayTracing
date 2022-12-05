@@ -15,6 +15,8 @@ print("Max: ",max(maxValues))
 #df.to_csv("knn_porto.csv")
 #df.describe().to_csv("knn_3droad_dist_summary.csv")
 '''
+
+
 '''
 Used to find max, 99th and 90th percentile distance between any two points in the dataset.
 '''
@@ -28,19 +30,20 @@ import pandas as pd
 file_names = ["/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/TrueKNN/kitti.csv"]
 sizes = [100000, 200000, 400000, 800000]
 
+#Number of neighbors (k)
+neighs = {}
+neighs[100000] = [5, 316]
+neighs[200000] = [5, 447]
+neighs[400000] = [5, 660]
+neighs[800000] = [5, 894]
 
 '''neighs = {}
-neighs[100000] = 316
-neighs[200000] = 447
-neighs[400000] = 660
-neighs[800000] = 894'''
-
-neighs = {}
 neighs[100000] = 5
 neighs[200000] = 5
 neighs[400000] = 5
-neighs[800000] = 5
+neighs[800000] = 5'''
 
+#Redirect output to a file
 for file_name in file_names:
 	print("-----------------------------"+file_name+"------------------------------")
 	for size in sizes:
