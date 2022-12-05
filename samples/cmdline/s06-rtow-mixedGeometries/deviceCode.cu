@@ -143,13 +143,11 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 				//printf("\n\nAfter 1st filter:\nFound neighbor between index = %d: (%f,%f,%f) and primIndex = %d: (%f,%f,%f) \n\t dist = %f maxDist = %f \n", 
 				//xID,org.x,org.y,org.z,primID,self.center.x,self.center.y,self.center.z,distance,maxDist);
 
-				//if(xID == 33)
-					//printf("INTERSECT: Numneighbors for %d = %d \n\t maxDist = %f | distance = %f\n",xID, optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors, maxDist, distance);
+				//if(xID == 6)
+						  //printf("INTERSECT: Numneighbors for %d = %d \n\t maxDist = %f | distance = %f\n",xID, optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors, maxDist, distance);
 				//Check if distance to currently intersceted sphere is less than the max we have seen so far
 				if(distance < maxDist)
 				{		
-					//if(xID == 33)
-						//printf("Came to Intersect to add new neighbor!\n");
 					//Smaller than max distance, so it will be a new neighbor
 					if(optixLaunchParams.frameBuffer[xID*k].numNeighbors > 0)
 						optixLaunchParams.frameBuffer[xID*k].numNeighbors -= 1;
@@ -170,7 +168,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 						//Need to figure out where to insert the current point
 						if(distance < optixLaunchParams.frameBuffer[xID*k+q].dist)
 						{
-							//if(xID == 33)
+							//if(xID == 6)
 								//printf("Intersect distance = %f | frameBuffer distance = %f | q = %d\n", distance, optixLaunchParams.frameBuffer[xID*k+q].dist, q);
 							break;
 						}
@@ -202,44 +200,16 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   //if(xID == 29974)
 		//printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
   
-  if(optixLaunchParams.callNum == 3)
-  {
-
-	if(optixLaunchParams.frameBuffer[xID*knn].numNeighbors > 0 && optixLaunchParams.frameBuffer[xID*knn].sparse)	
-	{
-		//printf("RAYGEN: Point %d: (%f,%f,%f) | numNeighs = %d\n",xID, optixLaunchParams.spheres[xID].center.x, optixLaunchParams.spheres[xID].center.y, optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
-		owl::Ray ray(optixLaunchParams.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
- 	 	owl::traceRay(self.world, ray, color);
- 	}
-
-  }
-
-
   //Only launch rays if the point hasn't found k nearest neighbors yet. We use xID*k so that point 0 has neighbors from 0 to k-1 etc..
-  if(optixLaunchParams.frameBuffer[xID*knn].numNeighbors > 0 && optixLaunchParams.callNum != 3 && !optixLaunchParams.frameBuffer[xID*knn].sparse)
+  if(optixLaunchParams.frameBuffer[xID*knn].numNeighbors > 0)
   {
-	//if(xID == 33)
-  		//printf("RAYGEN: Launching ray for Point[%d] = (%f,%f,%f) numNeighbors = %d\n",xID,optixLaunchParams.spheres[xID].center.x,optixLaunchParams.spheres[xID].center.y,optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
+  	//printf("RAYGEN: Launching ray for Point[%d] = (%f,%f,%f) numNeighbors = %d\n",xID,optixLaunchParams.spheres[xID].center.x,optixLaunchParams.spheres[xID].center.y,optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
 
 		//printf("optixLaunchParams.frameBuffer[%d].dist = %f\n",xID,optixLaunchParams.frameBuffer[xID].dist);
 
 		owl::Ray ray(optixLaunchParams.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
  	 	owl::traceRay(self.world, ray, color);
   }
-
-
-
-  if(optixLaunchParams.callNum == 3)
-  {
-	//printf("sparse\n");
-	if(optixLaunchParams.frameBuffer[xID*knn].numNeighbors >= knn/2)
-	{
-		optixLaunchParams.frameBuffer[xID*knn].sparse = 1;
-		//printf("Setting %d as sparse \n",xID);
-	}
-  }
-
-
   //if(xID == 3019)
   	//printf("Numneighbors for xID = %d and id = %d: %d\n",xID, id, optixLaunchParams.frameBuffer[3019*optixLaunchParams.k].numNeighbors);
 
@@ -249,8 +219,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	//printf("RAYGEN: Point (%f,%f,%f) | numNeighs = %d\n",optixLaunchParams.spheres[xID].center.x, optixLaunchParams.spheres[xID].center.y, optixLaunchParams.spheres[xID].center.z,optixLaunchParams.frameBuffer[xID*optixLaunchParams.k].numNeighbors);
 	//printf("Intersections for %d: %d\n", xID, intersections);
 	
-	
-	/*if(xID == 33)
+	/*
+	if(xID == 6)
 	{
 		printf("DEVICE: numNeighbors[%d] = %d\n",xID*knn, optixLaunchParams.frameBuffer[xID*knn].numNeighbors);
 		for(int i=0;i<knn;i++)
