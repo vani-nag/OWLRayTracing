@@ -169,7 +169,7 @@ for size in sizes:
 		for radius in radii_porto[size]:
 			filename = file_path + "/start_radius_"+str(radius)
 			for i in range(0,1):
-				cmd = "./sample06-rtow-mixedGeometries /home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/porto.csv "+str(size)+" "+str(radius)+" "+str(k)+" "+filename+" >> "+output_path+"/start_radius_"+str(radius)+"_output"
+				cmd = "./sample06-rtow-mixedGeometries /home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/3D_uniform_dist.csv "+str(size)+" "+str(radius)+" "+str(k)+" "+filename+" >> "+output_path+"/start_radius_"+str(radius)+"_output"
 				os.system(cmd)
 
 
