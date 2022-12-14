@@ -289,7 +289,7 @@ int main(int ac, char **argv)
 	auto round_end = std::chrono::steady_clock::now();
 	//auto round_elapsed = std::chrono::steady_clock::now();
 	////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-	while(!foundKNN) //&& (stop==0 | stop==1))
+	while(!foundKNN && (stop==0 | stop==1))
 	{
 		cout<<"\n===============================================================================================================\nRound: "<<++numRounds<<" Radius = "<<radius<<'\n';
 	
@@ -320,6 +320,7 @@ int main(int ac, char **argv)
 		*/
 		
 		//Determine if we need another round
+		
 		for(int j=0; j<Spheres.size(); j++)
 		{
 			//outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<", "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
@@ -330,11 +331,11 @@ int main(int ac, char **argv)
 			{
 				foundKNN = 0;
 				radius *= 2;
-				/*if(radius > atof(argv[6]))
+				if(radius >= atof(argv[6]))
 				{
 					radius = atof(argv[6]);
 					stop+=1;
-				}*/
+				}
 				owlGeomSet1f(SpheresGeom,"rad",radius);
 				owlParamsSet1f(lp,"distRadius",radius);
 				//start_rebuild = std::chrono::steady_clock::now();
@@ -349,12 +350,13 @@ int main(int ac, char **argv)
 			}
 		//outfile.close();
 		}	
+		
 		//Time per round
-		/*
+		
 		round_end = std::chrono::steady_clock::now();
 		auto round_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(round_end - round_start);
 		std::cout<<"Round: "<<numRounds<<" Time: "<< round_elapsed.count()/1000000.0 << " seconds"<<'\n';
-		*/
+		
 	}
 	auto end = std::chrono::steady_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
