@@ -278,6 +278,9 @@ Per-OS Instructions:
    ```
     export OptiX_INSTALL_DIR=/..../NVIDIA-OptiX-SDK-7.2.0-linux64-x86_64
     ```
+
+  - Modify Line 54 of [CMakeLists.txt](https://github.com/vani-nag/OWLRayTracing/blob/master/CMakeLists.txt) to 
+  `set (CMAKE_CXX_FLAGS "--std=c++11 -pthread")`. Note the inclusion of `-pthread`.
 - Windows
     - Requires: Visual Studio (both 2017 and 2019 work), OptiX 7.0, cmake
 	- Build: Use CMake-GUI to build Visual Studio project, then use VS to build
