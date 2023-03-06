@@ -1,6 +1,15 @@
 # OWL: A Node Graph "Wrapper" Library for OptiX 7
 
 <!--- ------------------------------------------------------- -->
+## General-purpose computation on RT Cores
+Though the RT cores were built to accelerate ray tracing applications, we show that we can re-structure problems to resemble ray tracing problems that can leverage the hardware acceleration. 
+
+In this repository, we implemented a clustering application (DBSCAN) and k-Nearest Neighbors that use RT acceleration.
+
+### RT-DBSCAN 
+RT-DBSCAN offloads distance computations in DBSCAN to the ray tracing cores and performs other clustering operations in shader cores. The implementation and execution instructions are in the [RT-DBSCAN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/cmdline/s05-rtow) directory.
+
+### TrueKNN 
 ## What is OWL?
 
 OWL is a convenience/productivity-oriented library on top of OptiX
