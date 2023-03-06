@@ -265,6 +265,12 @@ Per-OS Instructions:
 	make
 	```
 	(mind to use `cmake3`, not `cmake`, using the wrong one will mess up the build directory)
+
+  Make sure that the cuda binary and library are included in $PATH and LD_LIBRARY_PATH:
+  ```
+  export PATH="/usr/local/cuda-10.1/bin:$PATH"
+  export LD_LIBRARY_PATH="/usr/local/cuda-10.1/lib64:$LD_LIBRARY_PATH"
+  ```
 - Windows
     - Requires: Visual Studio (both 2017 and 2019 work), OptiX 7.0, cmake
 	- Build: Use CMake-GUI to build Visual Studio project, then use VS to build
