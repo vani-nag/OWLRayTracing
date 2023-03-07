@@ -76,7 +76,7 @@ int main(int ac, char **av) {
   int dim = 3;
   std::string line;
   std::ifstream myfile;
-  myfile.open(av[5]);
+  myfile.open(av[1]);
   // myfile.open("/home/min/a/nagara16/fast-cuda-gpu-dbscan/CUDA_DCLUST_datasets/3D_iono.txt");
   // myfile.open("/home/min/a/nagara16/ArborX/build/examples/dbscan/porto.txt");
   // myfile.open("/home/min/a/nagara16/Downloads/owl/samples/cmdline/s01-simpleTriangles/testing/3droad_full.csv");
@@ -85,10 +85,9 @@ int main(int ac, char **av) {
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-  int count = atof(av[1]) * dim;
-  // int count=0;
+  int count = atof(av[2]) * dim;
+
   while (getline(myfile, line) && count > 0) {
-    // std::cout << line << '\n';
     std::stringstream ss(line);
     float i;
     while (ss >> i) {
@@ -105,8 +104,8 @@ int main(int ac, char **av) {
   // ##################################################################
 
   // Select minPts,epsilon
-  float radius = atof(av[2]);
-  int minPts = atof(av[3]);
+  float radius = atof(av[3]);
+  int minPts = atof(av[4]);
 
   //If dataset is 2D, set z dimension to 0	
   if (dim == 2) {
@@ -294,7 +293,7 @@ int main(int ac, char **av) {
   // ##################################################################
 
   std::ofstream ofile;
-  ofile.open(av[4], std::ios::app);
+  ofile.open(av[5], std::ios::app);
 
   ////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
 
