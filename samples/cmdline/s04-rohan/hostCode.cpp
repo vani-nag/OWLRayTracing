@@ -28,6 +28,7 @@
 #include <vector>
 #include<iostream>
 #include<fstream>
+#include <queue>
 #include<string>
 #include<sstream>
 #include <random>
@@ -55,24 +56,82 @@ const vec3f lookAt(0, 0, 0);
 const vec3f lookUp(0.f,1.f,0.f);
 const float fovy = 20.f;
 
-std::vector<Sphere> Spheres;
+std::vector<Sphere> InternalSpheres;
+std::vector<Sphere> LeafSpheres;
 
 int main(int ac, char **av) {
+
+  // ##################################################################
+  // Building Barnes Hut Tree
+  // ##################################################################
+
+  BarnesHutTree* tree = new BarnesHutTree(0.5f, 5.0f);
+  Node* root = new Node(0.f, 0.f, 5.0f);
+
+  std::vector<Point> points = {
+    {3.0, 4.0, 10},
+    {4.0, 1.0, 6.0},
+    {3.0, -3.0, 4.0},
+    {1.0, -1.0, 1.0},
+    {-2.0, 4.0, 8.0}
+  };
+  
+  for(const auto& point: points) {
+    tree->insertNode(root, point);
+  };
+
+  tree->printTree(root, 0);
 
   // ##################################################################
   // Create scene
   // ##################################################################
 
+  float sphereRadius = 2.5/.5;
 
-  Spheres.push_back(Sphere{vec3f(0, 5, 0), -1});
-  Spheres.push_back(Sphere{vec3f(0, -1, 0), -1});
+  for(const auto& point: points) {
+    LeafSpheres.push_back(Sphere{vec3f{point.x, point.y, 0}, point.mass, true});
+  }
+
+  // level order traversal of BarnesHutTree
+  // Create an empty queue for level order traversal
+  queue<Node*> q;
+
+  // Enqueue Root and initialize height
+  q.push(root);
+
+  while (q.empty() == false) {
+      // Print front of queue and remove it from queue
+      Node* node = q.front();
+      if(node->s == 2.5f) {
+        if(node->mass != 0.0f) {
+          InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass, false});
+        }
+      }
+      //std::cout << node->s << " ";
+      q.pop();
+
+      /* Enqueue left child */
+      if (node->nw != NULL)
+          q.push(node->nw);
+
+      /*Enqueue right child */
+      if (node->ne != NULL)
+          q.push(node->ne);
+      
+      /* Enqueue left child */
+      if (node->sw != NULL)
+          q.push(node->sw);
+
+      /*Enqueue right child */
+      if (node->se != NULL)
+          q.push(node->se);
+  }
 
   // Init Frame Buffer. Don't need 2D threads, so just use x-dim for threadId
-  const vec2i fbSize(Spheres.size(), 1);
+  const vec2i fbSize(InternalSpheres.size(), 1);
 
-  // createScene();
   LOG_OK(" Executing DBSCAN");
-  LOG_OK(" dataset size: " << Spheres.size());
+  LOG_OK(" dataset size: " << InternalSpheres.size());
 
   // ##################################################################
   // init owl
@@ -112,16 +171,22 @@ int main(int ac, char **av) {
   OWLBuffer frameBuffer
     = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x);
 
-  // OWLBuffer frameBuffer = owlManagedMemoryBufferCreate(
-  //     context, OWL_USER_TYPE(ds[0]), ds.size(), ds.data());
+  
+  OWLBuffer LeafSpheresBuffer = owlDeviceBufferCreate(
+      context, OWL_USER_TYPE(LeafSpheres[0]), LeafSpheres.size(), LeafSpheres.data());
 
-  OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
-      context, OWL_USER_TYPE(Spheres[0]), Spheres.size(), Spheres.data());
+  OWLGeom LeafSpheresGeom = owlGeomCreate(context, SpheresGeomType);
+  owlGeomSetPrimCount(LeafSpheresGeom, LeafSpheres.size());
+  owlGeomSetBuffer(LeafSpheresGeom, "prims", LeafSpheresBuffer);
+  owlGeomSet1f(LeafSpheresGeom, "rad", sphereRadius);
 
-  OWLGeom SpheresGeom = owlGeomCreate(context, SpheresGeomType);
-  owlGeomSetPrimCount(SpheresGeom, Spheres.size());
-  owlGeomSetBuffer(SpheresGeom, "prims", SpheresBuffer);
-  owlGeomSet1f(SpheresGeom, "rad", 5.f);
+  OWLBuffer InternalSpheresBuffer = owlDeviceBufferCreate(
+      context, OWL_USER_TYPE(InternalSpheres[0]), InternalSpheres.size(), InternalSpheres.data());
+
+  OWLGeom InternalSpheresGeom = owlGeomCreate(context, SpheresGeomType);
+  owlGeomSetPrimCount(InternalSpheresGeom, InternalSpheres.size());
+  owlGeomSetBuffer(InternalSpheresGeom, "prims", InternalSpheresBuffer);
+  owlGeomSet1f(InternalSpheresGeom, "rad", sphereRadius);
 
   // ##################################################################
   // Params
@@ -141,7 +206,7 @@ int main(int ac, char **av) {
   // set up all *ACCELS* we need to trace into those groups
   // ##################################################################
  
-  OWLGeom userGeoms[] = {SpheresGeom};
+  OWLGeom userGeoms[] = {InternalSpheresGeom, LeafSpheresGeom};
 
   auto start_b = std::chrono::steady_clock::now();
   OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
@@ -167,7 +232,8 @@ int main(int ac, char **av) {
   // set up ray gen program
   // -------------------------------------------------------
   OWLVarDecl rayGenVars[] = {
-      {"spheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, spheres)},
+      {"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
+      {"leafSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, leafSpheres)},
       {"fbSize", OWL_INT2, OWL_OFFSETOF(RayGenData, fbSize)},
       {"world", OWL_GROUP, OWL_OFFSETOF(RayGenData, world)},
       {"camera.org", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.origin)},
@@ -199,7 +265,8 @@ int main(int ac, char **av) {
   const vec3f vertical = 2.0f * half_height * focusDist * v;
 
   // ----------- set variables  ----------------------------
-  owlRayGenSetBuffer(rayGen, "spheres", SpheresBuffer);
+  owlRayGenSetBuffer(rayGen, "internalSpheres", InternalSpheresBuffer);
+  owlRayGenSetBuffer(rayGen, "leafSpheres", LeafSpheresBuffer);
   owlRayGenSet2i(rayGen, "fbSize", (const owl2i &)fbSize);
   owlRayGenSetGroup(rayGen, "world", world);
   owlRayGenSet3f(rayGen, "camera.org", (const owl3f &)origin);
@@ -215,30 +282,12 @@ int main(int ac, char **av) {
   owlBuildSBT(context);
 
   // ##################################################################
-  // Building Barnes Hut Tree
+  // Start Ray Tracing
   // ##################################################################
 
-  BarnesHutTree* tree = new BarnesHutTree(0.5f, 5.0f);
-  Node* root = new Node(0.f, 0.f, 5.0f);
-
-  std::vector<Point> points = {
-        {3.0, 4.0, 10},
-        {4.0, 1.0, 6.0},
-        {3.0, -3.0, 4.0},
-        {1.0, -1.0, 1.0},
-        {-2.0, 4.0, 8.0}
-        //{9.0, 2.0, 4.0}
-    };
-  
-  for(const auto& point: points) {
-    tree->insertNode(root, point);
-  };
-
-  tree->printTree(root, 0);
-  //Core point identification
   auto start1 = std::chrono::steady_clock::now();
 
-  owlLaunch2D(rayGen, 1, 1, lp);
+  owlLaunch2D(rayGen, LeafSpheres.size(), 1, lp);
 
   auto end1 = std::chrono::steady_clock::now();
   auto elapsed1 =

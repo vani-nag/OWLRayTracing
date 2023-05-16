@@ -28,8 +28,8 @@ namespace owl {
   // ==================================================================
   struct Sphere {
     vec3f center;
-    //float mass;
-		int status;
+    float mass;
+    bool isLeaf; 
   };
 
   struct SpheresGeom {
@@ -47,7 +47,8 @@ namespace owl {
     vec2i  fbSize;
     OptixTraversableHandle world;
     int sbtOffset;
-    Sphere *spheres;
+    Sphere *internalSpheres;
+    Sphere *leafSpheres;
     
     struct {
       vec3f origin;

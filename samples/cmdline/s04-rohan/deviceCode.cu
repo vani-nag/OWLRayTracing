@@ -76,7 +76,8 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   y = self.center.y - org.y;
   z = self.center.z - org.z;
 
-  printf("Intersected circle with center x = %f, y = %f, z = %f \n", self.center.x, self.center.y, self.center.z);
+  if(self.isLeaf == false) 
+    printf("Ray %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, self.center.x, self.center.y, self.center.z, self.mass);
 	
 }
 
@@ -89,9 +90,9 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	const RayGenData &self = owl::getProgramData<RayGenData>();
 	vec3f color = 0.f;  
 	int xID = optixGetLaunchIndex().x;
-	owl::Ray ray(self.spheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
+	owl::Ray ray(self.leafSpheres[xID].center, vec3f(0,0,1), 0, 1.e-16f);
   printf("Starting ray %d\n", optixGetLaunchIndex().x);
-  printf("Starting ray at circle with center x = %f, y = %f, z = %f \n", self.spheres[xID].center.x, self.spheres[xID].center.y, self.spheres[xID].center.z);
+  printf("Starting ray at circle with center x = %f, y = %f, z = %f \n", self.leafSpheres[xID].center.x, self.leafSpheres[xID].center.y, self.leafSpheres[xID].center.z);
   owl::traceRay(self.world, ray, color);
 }
 
