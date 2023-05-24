@@ -47,16 +47,7 @@ namespace owl {
     uint32_t *fbPtr;
     vec2i  fbSize;
     OptixTraversableHandle *worlds;
-    int sbtOffset;
-    //Sphere *internalSpheres;
     Point *points;
-    
-    struct {
-      vec3f origin;
-      vec3f lower_left_corner;
-      vec3f horizontal;
-      vec3f vertical;
-    } camera;
   };
 
   struct MissProgData

@@ -211,42 +211,17 @@ int main(int ac, char **av) {
       {"points", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, points)},
       {"fbSize", OWL_INT2, OWL_OFFSETOF(RayGenData, fbSize)},
       {"worlds", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, worlds)},
-      {"camera.org", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.origin)},
-      {"camera.llc", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.lower_left_corner)},
-      {"camera.horiz", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.horizontal)},
-      {"camera.vert", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.vertical)},
       {/* sentinel to mark end of list */}};
 
   // ........... create object  ............................
   OWLRayGen rayGen = owlRayGenCreate(context, module, "rayGen",
                                      sizeof(RayGenData), rayGenVars, -1);
 
-  // ........... compute variable values  ..................
-  const float vfov = fovy;
-  const vec3f vup = lookUp;
-  const float aspect = fbSize.x / float(fbSize.y);
-  const float theta = vfov * ((float)M_PI) / 180.0f;
-  const float half_height = tanf(theta / 2.0f);
-  const float half_width = aspect * half_height;
-  const float focusDist = 10.f;
-  const vec3f origin = lookFrom;
-  const vec3f w = normalize(lookFrom - lookAt);
-  const vec3f u = normalize(cross(vup, w));
-  const vec3f v = cross(w, u);
-  const vec3f lower_left_corner = origin - half_width * focusDist * u -
-                                  half_height * focusDist * v - focusDist * w;
-  const vec3f horizontal = 2.0f * half_width * focusDist * u;
-  const vec3f vertical = 2.0f * half_height * focusDist * v;
-
   // ----------- set variables  ----------------------------
   //owlRayGenSetBuffer(rayGen, "internalSpheres", InternalSpheresBuffer);
   owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
   owlRayGenSet2i(rayGen, "fbSize", (const owl2i &)fbSize);
   owlRayGenSetBuffer(rayGen, "worlds", WorldsBuffer);
-  owlRayGenSet3f(rayGen, "camera.org", (const owl3f &)origin);
-  owlRayGenSet3f(rayGen, "camera.llc", (const owl3f &)lower_left_corner);
-  owlRayGenSet3f(rayGen, "camera.horiz", (const owl3f &)horizontal);
-  owlRayGenSet3f(rayGen, "camera.vert", (const owl3f &)vertical);
 
   // programs have been built before, but have to rebuild raygen and
   // miss progs
