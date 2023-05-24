@@ -15,6 +15,7 @@
 // ======================================================================== //
 
 #include "Materials.h"
+#include "barnesHutTree.h"
 
 namespace owl {
 
@@ -45,10 +46,10 @@ namespace owl {
   {
     uint32_t *fbPtr;
     vec2i  fbSize;
-    OptixTraversableHandle world;
+    OptixTraversableHandle *worlds;
     int sbtOffset;
-    Sphere *internalSpheres;
-    Sphere *leafSpheres;
+    //Sphere *internalSpheres;
+    Point *points;
     
     struct {
       vec3f origin;

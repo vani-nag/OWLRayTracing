@@ -39,8 +39,6 @@
 // barnesHutStuff
 #include "barnesHutTree.h"
 
-
-
 #define LOG(message)                                            \
   std::cout << OWL_TERMINAL_BLUE;                               \
   std::cout << "#owl.sample(main): " << message << std::endl;    \
@@ -56,17 +54,67 @@ const vec3f lookAt(0, 0, 0);
 const vec3f lookUp(0.f,1.f,0.f);
 const float fovy = 20.f;
 
-std::vector<Sphere> InternalSpheres;
-std::vector<Sphere> LeafSpheres;
+// global variables
+int deviceID;
+vec2f fbSize;
+float gridSize = 5.0f;
+float threshold = 0.5f;
+
+OWLContext context = owlContextCreate(nullptr, 1);
+OWLModule module = owlModuleCreate(context, deviceCode_ptx);
+
+OWLVarDecl SpheresGeomVars[] = {
+    {"prims", OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom, prims)},
+    {"rad", OWL_FLOAT, OWL_OFFSETOF(SpheresGeom, rad)},
+    {/* sentinel to mark end of list */}};
+
+OWLGeomType SpheresGeomType = owlGeomTypeCreate(
+    context, OWL_GEOMETRY_USER, sizeof(SpheresGeom), SpheresGeomVars, -1);
+
+// ##################################################################
+// Create world function
+// ##################################################################
+OptixTraversableHandle createSceneGivenGeometries(std::vector<Sphere> Spheres, float spheresRadius) {
+  auto start_b = std::chrono::steady_clock::now();
+  // Init Frame Buffer. Don't need 2D threads, so just use x-dim for threadId
+  fbSize = vec2f(Spheres.size(), 1);
+
+  // Create Spheres Buffer
+  OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
+      context, OWL_USER_TYPE(Spheres[0]), Spheres.size(), Spheres.data());
+
+  OWLGeom SpheresGeometry = owlGeomCreate(context, SpheresGeomType);
+  owlGeomSetPrimCount(SpheresGeometry, Spheres.size());
+  owlGeomSetBuffer(SpheresGeometry, "prims", SpheresBuffer);
+  owlGeomSet1f(SpheresGeometry, "rad", spheresRadius);
+
+  // Setup accel group
+  OWLGeom userGeoms[] = {SpheresGeometry};
+
+  OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
+  owlGroupBuildAccel(spheresGroup);
+
+  OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
+  owlGroupBuildAccel(world);
+
+  LOG_OK("Built world for grid size: " << gridSize << " and sphere radius : " << spheresRadius);
+
+  auto end_b = std::chrono::steady_clock::now();
+  auto elapsed_b =
+      std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
+  std::cout << "Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
+            << std::endl;
+
+  return owlGroupGetTraversable(world, deviceID);
+}
 
 int main(int ac, char **av) {
 
   // ##################################################################
   // Building Barnes Hut Tree
   // ##################################################################
-
-  BarnesHutTree* tree = new BarnesHutTree(0.5f, 5.0f);
-  Node* root = new Node(0.f, 0.f, 5.0f);
+  BarnesHutTree* tree = new BarnesHutTree(threshold, gridSize);
+  Node* root = new Node(0.f, 0.f, gridSize);
 
   std::vector<Point> points = {
     {3.0, 4.0, 10},
@@ -75,6 +123,8 @@ int main(int ac, char **av) {
     {1.0, -1.0, 1.0},
     {-2.0, 4.0, 8.0}
   };
+  OWLBuffer PointsBuffer = owlDeviceBufferCreate(
+    context, OWL_USER_TYPE(points[0]), points.size(), points.data());
   
   for(const auto& point: points) {
     tree->insertNode(root, point);
@@ -82,15 +132,30 @@ int main(int ac, char **av) {
 
   tree->printTree(root, 0);
 
+  // Get the device ID
+  cudaGetDevice(&deviceID);
+  LOG_OK("Device ID: " << deviceID);
+  owlGeomTypeSetIntersectProg(SpheresGeomType, 0, module, "Spheres");
+  owlGeomTypeSetBoundsProg(SpheresGeomType, module, "Spheres");
+  owlBuildPrograms(context);
+
+  OWLBuffer frameBuffer = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x);
+
+  OWLVarDecl myGlobalsVars[] = {
+    // {"frameBuffer", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, frameBuffer)},
+    // {"callNum", OWL_INT, OWL_OFFSETOF(MyGlobals, callNum)},
+    // {"minPts", OWL_INT, OWL_OFFSETOF(MyGlobals, minPts)},
+    {/* sentinel to mark end of list */}};
+
+  OWLParams lp = owlParamsCreate(context, sizeof(MyGlobals), myGlobalsVars, -1);
+
   // ##################################################################
-  // Create scene
+  // Level order traversal of Barnes Hut Tree to build worlds
   // ##################################################################
 
-  float sphereRadius = 2.5/.5;
-
-  for(const auto& point: points) {
-    LeafSpheres.push_back(Sphere{vec3f{point.x, point.y, 0}, point.mass, true});
-  }
+  std::vector<OptixTraversableHandle> worlds;
+  std::vector<Sphere> InternalSpheres;
+  float prevS = gridSize;
 
   // level order traversal of BarnesHutTree
   // Create an empty queue for level order traversal
@@ -102,12 +167,19 @@ int main(int ac, char **av) {
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
-      if(node->s == 2.5f) {
+      if((node->s != prevS)) {
+        if(!InternalSpheres.empty()) {
+          worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
+        }
+        InternalSpheres.clear();
+        prevS = node->s;
+        gridSize = node->s;
+      }
+      if(node->s == gridSize) {
         if(node->mass != 0.0f) {
           InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass, false});
         }
       }
-      //std::cout << node->s << " ";
       q.pop();
 
       /* Enqueue left child */
@@ -126,119 +198,21 @@ int main(int ac, char **av) {
       if (node->se != NULL)
           q.push(node->se);
   }
-
-  // Init Frame Buffer. Don't need 2D threads, so just use x-dim for threadId
-  const vec2i fbSize(InternalSpheres.size(), 1);
-
-  LOG_OK(" Executing DBSCAN");
-  LOG_OK(" dataset size: " << InternalSpheres.size());
-
-  // ##################################################################
-  // init owl
-  // ##################################################################
-
-  OWLContext context = owlContextCreate(nullptr, 1);
-  OWLModule module = owlModuleCreate(context, deviceCode_ptx);
-
-  // ##################################################################
-  // set up all the *GEOMETRY* graph we want to render
-  // ##################################################################
-
-  OWLVarDecl SpheresGeomVars[] = {
-      {"prims", OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom, prims)},
-      {"rad", OWL_FLOAT, OWL_OFFSETOF(SpheresGeom, rad)},
-      {/* sentinel to mark end of list */}};
-
-  OWLGeomType SpheresGeomType = owlGeomTypeCreate(
-      context, OWL_GEOMETRY_USER, sizeof(SpheresGeom), SpheresGeomVars, -1);
-  /*owlGeomTypeSetClosestHit(SpheresGeomType,0,
-                           module,"Spheres");*/
-  owlGeomTypeSetIntersectProg(SpheresGeomType, 0, module, "Spheres");
-  owlGeomTypeSetBoundsProg(SpheresGeomType, module, "Spheres");
-
-  // make sure to do that *before* setting up the geometry, since the
-  // user geometry group will need the compiled bounds programs upon
-  // accelBuild()
-  owlBuildPrograms(context);
-  LOG_OK("BUILD prog DONE\n");
-
-  // ##################################################################
-  // set up all the *GEOMS* we want to run that code on
-  // ##################################################################
-
-  // LOG("building geometries ...");
-
-  OWLBuffer frameBuffer
-    = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x);
-
   
-  OWLBuffer LeafSpheresBuffer = owlDeviceBufferCreate(
-      context, OWL_USER_TYPE(LeafSpheres[0]), LeafSpheres.size(), LeafSpheres.data());
-
-  OWLGeom LeafSpheresGeom = owlGeomCreate(context, SpheresGeomType);
-  owlGeomSetPrimCount(LeafSpheresGeom, LeafSpheres.size());
-  owlGeomSetBuffer(LeafSpheresGeom, "prims", LeafSpheresBuffer);
-  owlGeomSet1f(LeafSpheresGeom, "rad", sphereRadius);
-
-  OWLBuffer InternalSpheresBuffer = owlDeviceBufferCreate(
-      context, OWL_USER_TYPE(InternalSpheres[0]), InternalSpheres.size(), InternalSpheres.data());
-
-  OWLGeom InternalSpheresGeom = owlGeomCreate(context, SpheresGeomType);
-  owlGeomSetPrimCount(InternalSpheresGeom, InternalSpheres.size());
-  owlGeomSetBuffer(InternalSpheresGeom, "prims", InternalSpheresBuffer);
-  owlGeomSet1f(InternalSpheresGeom, "rad", sphereRadius);
-
-  // ##################################################################
-  // Params
-  // ##################################################################
-
-  OWLVarDecl myGlobalsVars[] = {
-      // {"frameBuffer", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, frameBuffer)},
-      // {"callNum", OWL_INT, OWL_OFFSETOF(MyGlobals, callNum)},
-      // {"minPts", OWL_INT, OWL_OFFSETOF(MyGlobals, minPts)},
-      {/* sentinel to mark end of list */}};
-
-  OWLParams lp = owlParamsCreate(context, sizeof(MyGlobals), myGlobalsVars, -1);
-
-  LOG_OK("Geoms and Params DONE\n");
-
-  // ##################################################################
-  // set up all *ACCELS* we need to trace into those groups
-  // ##################################################################
- 
-  OWLGeom userGeoms[] = {InternalSpheresGeom, LeafSpheresGeom};
-
-  auto start_b = std::chrono::steady_clock::now();
-  OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
-  owlGroupBuildAccel(spheresGroup);
-
-  OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
-  owlGroupBuildAccel(world);
-
-  LOG_OK("Group build DONE\n");
-
-  auto end_b = std::chrono::steady_clock::now();
-  auto elapsed_b =
-      std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
-  std::cout << "Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
-            << std::endl;
-
-  // ##################################################################
-  // set miss and raygen programs
-  // ##################################################################
-
+  std::cout << "Worlds size:" << worlds.size() << std::endl;
+  OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
+        context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
 
   // -------------------------------------------------------
   // set up ray gen program
   // -------------------------------------------------------
   OWLVarDecl rayGenVars[] = {
-      {"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
-      {"leafSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, leafSpheres)},
+      //{"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
+      {"points", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, points)},
       {"fbSize", OWL_INT2, OWL_OFFSETOF(RayGenData, fbSize)},
-      {"world", OWL_GROUP, OWL_OFFSETOF(RayGenData, world)},
+      {"worlds", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, worlds)},
       {"camera.org", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.origin)},
-      {"camera.llc", OWL_FLOAT3,
-       OWL_OFFSETOF(RayGenData, camera.lower_left_corner)},
+      {"camera.llc", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.lower_left_corner)},
       {"camera.horiz", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.horizontal)},
       {"camera.vert", OWL_FLOAT3, OWL_OFFSETOF(RayGenData, camera.vertical)},
       {/* sentinel to mark end of list */}};
@@ -265,10 +239,10 @@ int main(int ac, char **av) {
   const vec3f vertical = 2.0f * half_height * focusDist * v;
 
   // ----------- set variables  ----------------------------
-  owlRayGenSetBuffer(rayGen, "internalSpheres", InternalSpheresBuffer);
-  owlRayGenSetBuffer(rayGen, "leafSpheres", LeafSpheresBuffer);
+  //owlRayGenSetBuffer(rayGen, "internalSpheres", InternalSpheresBuffer);
+  owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
   owlRayGenSet2i(rayGen, "fbSize", (const owl2i &)fbSize);
-  owlRayGenSetGroup(rayGen, "world", world);
+  owlRayGenSetBuffer(rayGen, "worlds", WorldsBuffer);
   owlRayGenSet3f(rayGen, "camera.org", (const owl3f &)origin);
   owlRayGenSet3f(rayGen, "camera.llc", (const owl3f &)lower_left_corner);
   owlRayGenSet3f(rayGen, "camera.horiz", (const owl3f &)horizontal);
@@ -287,26 +261,16 @@ int main(int ac, char **av) {
 
   auto start1 = std::chrono::steady_clock::now();
 
-  owlLaunch2D(rayGen, LeafSpheres.size(), 1, lp);
+  owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
 
   auto end1 = std::chrono::steady_clock::now();
   auto elapsed1 =
       std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  std::cout << "Core points time: " << elapsed1.count() / 1000000.0
+  std::cout << "Intersections time: " << elapsed1.count() / 1000000.0
             << " seconds." << std::endl;
   
   const uint32_t *fb
     = (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
-
-  //Write cluster results to file
-  // ofile << "ind" << '\t'<< "cluster"<< std::endl;
-  /*for(int i = 0; i < Spheres.size(); i++)
-  {
-          temp = find(fb[i].parent,fb);
-
-                  ofile << i << '\t'<< temp<< std::endl;
-          //cout<<i<<'\t'<<find(fb[i].parent,fb)<<'\n';
-  }*/
 
   // ##################################################################
   // and finally, clean up
