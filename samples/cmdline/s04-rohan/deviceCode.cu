@@ -63,16 +63,16 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   float &prd = getPRD<float>();
   
   //Inside circle?
-  const vec3f org = optixGetWorldRayOrigin();
-  float x,y,z;
+  //const vec3f org = optixGetWorldRayOrigin();
+  // float x,y,z;
   
   //Get closest hit triangle's associated circle
-  x = self.center.x - org.x;
-  y = self.center.y - org.y;
-  z = self.center.z - org.z;
+  // x = self.center.x - org.x;
+  // y = self.center.y - org.y;
+  // z = self.center.z - org.z;
 
-  if(self.isLeaf == false) 
-    printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f, color = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass, prd);
+  //if(self.isLeaf == false) 
+    //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f, color = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass, prd);
 }
 
 // ==================================================================
@@ -86,8 +86,13 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 	int xID = optixGetLaunchIndex().x;
   int yID = optixGetLaunchIndex().y;
 	owl::Ray ray(vec3f(self.points[xID].x,self.points[xID].y,0), vec3f(0,0,1), 0, 1.e-16f);
-  printf("Starting ray for level %d with index: %d\n", yID, xID);
-  printf("Starting ray in level %d at circle with center x = %f, y = %f \n", yID, self.points[xID].x, self.points[xID].y);
+  //printf("Level: %d \n", optixLaunchParams.yIDx);
+  //printf("Starting ray for level %d with index: %d\n", yID, xID);
+  //printf("Starting ray in level %d at circle with center x = %f, y = %f \n", yID, self.points[xID].x, self.points[xID].y);
+  if(optixLaunchParams.parallelLaunch == 0) {
+    yID = optixLaunchParams.yIDx;
+  }
+  //printf("Starting ray for level %d with index: %d\n", yID, xID);
   owl::traceRay(self.worlds[yID], ray, level);
 }
 

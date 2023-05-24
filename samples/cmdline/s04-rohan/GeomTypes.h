@@ -57,11 +57,8 @@ namespace owl {
 
 	struct MyGlobals 
 	{	
-		//Sphere *spheres;	
-		//int *frameBuffer;
-		//DisjointSet *ds;
-		//Sphere *frameBuffer;
-		//int **frameBuffer;
+		int yIDx;
+    int parallelLaunch;
 	};
 
 }
