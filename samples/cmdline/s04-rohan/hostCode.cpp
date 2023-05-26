@@ -118,7 +118,8 @@ int main(int ac, char **av) {
   Node* root = new Node(0.f, 0.f, gridSize);
 
   // Generate random points
-  int numPoints = 1000000;  // Specify the number of points
+  int numPoints = 1000;  // Specify the number of points
+
   std::vector<Point> points;
 
   for (int i = 0; i < numPoints; ++i) {
@@ -128,6 +129,8 @@ int main(int ac, char **av) {
     p.mass = disMass(gen);
     points.push_back(p);
   }
+
+   LOG_OK("Number of Bodies: " << points.size());
 
   // std::vector<Point> points = {
   //   {3.0, 4.0, 10},
@@ -261,7 +264,7 @@ int main(int ac, char **av) {
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 1);
-  //owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
+  owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
 
   auto end1 = std::chrono::steady_clock::now();
   auto elapsed1 =
@@ -276,7 +279,7 @@ int main(int ac, char **av) {
   owlParamsSet1i(lp, "parallelLaunch", 0);
   for(int i = 0; i < worlds.size(); i++) {
     owlParamsSet1i(lp, "yIDx", i);
-    //owlLaunch2D(rayGen, points.size(), 1, lp);
+    owlLaunch2D(rayGen, points.size(), 1, lp);
   }
 
   auto end2 = std::chrono::steady_clock::now();

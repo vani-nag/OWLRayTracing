@@ -19,7 +19,6 @@
 //#include</home/min/a/nagara16/Downloads/owl/owl/include/owl/common/parallel/parallel_for.h>
 
 using namespace owl;
-#define NUM_SAMPLES_PER_PIXEL 16
 __constant__ MyGlobals optixLaunchParams;
 
 ////////////////////////////////////////////////////////////////CODE BEGINS//////////////////////////////////////////////////////////////////
