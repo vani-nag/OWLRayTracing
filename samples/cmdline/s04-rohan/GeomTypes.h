@@ -19,6 +19,12 @@
 
 namespace owl {
 
+
+  struct IntersectionInfo {
+    Point *origin;
+    Node *intersected;
+  };
+
 	struct Storage {
 		int *neigh;
 	};

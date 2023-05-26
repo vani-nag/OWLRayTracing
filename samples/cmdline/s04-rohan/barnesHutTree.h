@@ -8,6 +8,7 @@ namespace owl {
     float x;
     float y;
     float mass;
+    int idX;
   };
 
 

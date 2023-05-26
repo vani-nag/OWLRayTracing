@@ -109,6 +109,23 @@ OptixTraversableHandle createSceneGivenGeometries(std::vector<Sphere> Spheres, f
   return owlGroupGetTraversable(world, deviceID);
 }
 
+size_t calculateQuadTreeSize(Node* node) {
+    if (node == nullptr) {
+        return 0;  // Base case: empty node
+    }
+
+    size_t currentNodeSize = sizeof(Node);
+
+    // Recursively calculate the size of each child subtree
+    size_t size = currentNodeSize;  // Count the current node itself
+    size += calculateQuadTreeSize(node->nw);
+    size += calculateQuadTreeSize(node->ne);
+    size += calculateQuadTreeSize(node->sw);
+    size += calculateQuadTreeSize(node->se);
+
+    return size;
+}
+
 int main(int ac, char **av) {
 
   // ##################################################################
@@ -118,7 +135,7 @@ int main(int ac, char **av) {
   Node* root = new Node(0.f, 0.f, gridSize);
 
   // Generate random points
-  int numPoints = 1000;  // Specify the number of points
+  int numPoints = 3;  // Specify the number of points
 
   std::vector<Point> points;
 
@@ -127,10 +144,11 @@ int main(int ac, char **av) {
     p.x = dis(gen);
     p.y = dis(gen);
     p.mass = disMass(gen);
+    p.idX = i;
     points.push_back(p);
   }
 
-   LOG_OK("Number of Bodies: " << points.size());
+   //LOG("Number of Bodies: " << points.size());
 
   // std::vector<Point> points = {
   //   {3.0, 4.0, 10},
@@ -140,8 +158,10 @@ int main(int ac, char **av) {
   //   {-2.0, 4.0, 8.0}
   // };
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
-    context, OWL_USER_TYPE(points[0]), points.size(), points.data());
+     context, OWL_USER_TYPE(points[0]), points.size(), points.data());
 
+
+  LOG("Bulding Tree with # Of Bodies = " << points.size());
   auto start_tree = std::chrono::steady_clock::now();
   for(const auto& point: points) {
     tree->insertNode(root, point);
@@ -152,7 +172,8 @@ int main(int ac, char **av) {
   std::cout << "Barnes Hut Tree Build Time: " << elapsed_tree.count() / 1000000.0 << " seconds."
             << std::endl;
 
-  //tree->printTree(root, 0);
+  //LOG("Size of tree = " << calculateQuadTreeSize(root));
+  tree->printTree(root, 0);
 
   // Get the device ID
   cudaGetDevice(&deviceID);
@@ -182,6 +203,7 @@ int main(int ac, char **av) {
   // Create an empty queue for level order traversal
   queue<Node*> q;
 
+  LOG("Bulding OWL Scenes");
   // Enqueue Root and initialize height
   q.push(root);
   auto start_b = std::chrono::steady_clock::now();
@@ -232,6 +254,16 @@ int main(int ac, char **av) {
   std::cout << "Worlds size:" << worlds.size() << std::endl;
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
+  
+
+  std::vector<IntersectionInfo*> allIntersections;
+
+  for(int i = 0; i < worlds.size(); i++) {
+    IntersectionInfo* levelIntersectionData = new IntersectionInfo[points.size()];
+    for(int j = 0; j < points.size(); j++) {
+      levelIntersectionData[j].origin = points[j];
+    }
+  }
 
   // -------------------------------------------------------
   // set up ray gen program
@@ -264,7 +296,7 @@ int main(int ac, char **av) {
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 1);
-  owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
+  //owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
 
   auto end1 = std::chrono::steady_clock::now();
   auto elapsed1 =
@@ -277,7 +309,7 @@ int main(int ac, char **av) {
   // ##################################################################
   auto start2 = std::chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 0);
-  for(int i = 0; i < worlds.size(); i++) {
+  for(int i = 1; i < 2; i++) {
     owlParamsSet1i(lp, "yIDx", i);
     owlLaunch2D(rayGen, points.size(), 1, lp);
   }

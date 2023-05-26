@@ -57,9 +57,13 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	const int primID = optixGetPrimitiveIndex();
 	int xID = optixGetLaunchIndex().x;
   int level = optixGetLaunchIndex().y;
+  if(optixLaunchParams.parallelLaunch == 0) {
+    level = optixLaunchParams.yIDx;
+  }
   const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
   Sphere self = selfs.prims[primID];
   float &prd = getPRD<float>();
+  
   
   //Inside circle?
   //const vec3f org = optixGetWorldRayOrigin();
@@ -70,8 +74,8 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   // y = self.center.y - org.y;
   // z = self.center.z - org.z;
 
-  //if(self.isLeaf == false) 
-    //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f, color = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass, prd);
+  if(self.isLeaf == false) 
+    printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f, color = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass, prd);
 }
 
 // ==================================================================
