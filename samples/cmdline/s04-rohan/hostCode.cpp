@@ -70,6 +70,8 @@ float threshold = 0.5f;
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
+PointIntersectionInfo::PointIntersectionInfo(Point *point) : body(point), didIntersectNodes(nullptr), bhNodes(nullptr) {}
+
 OWLVarDecl SpheresGeomVars[] = {
     {"prims", OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom, prims)},
     {"rad", OWL_FLOAT, OWL_OFFSETOF(SpheresGeom, rad)},
@@ -128,6 +130,8 @@ size_t calculateQuadTreeSize(Node* node) {
 
 int main(int ac, char **av) {
 
+  auto total_run_time = std::chrono::steady_clock::now();
+
   // ##################################################################
   // Building Barnes Hut Tree
   // ##################################################################
@@ -148,15 +152,6 @@ int main(int ac, char **av) {
     points.push_back(p);
   }
 
-   //LOG("Number of Bodies: " << points.size());
-
-  // std::vector<Point> points = {
-  //   {3.0, 4.0, 10},
-  //   {4.0, 1.0, 6.0},
-  //   {3.0, -3.0, 4.0},
-  //   {1.0, -1.0, 1.0},
-  //   {-2.0, 4.0, 8.0}
-  // };
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
 
@@ -195,6 +190,13 @@ int main(int ac, char **av) {
   // Level order traversal of Barnes Hut Tree to build worlds
   // ##################################################################
 
+
+  std::vector<PointIntersectionInfo*> pointsIntersectionData;
+  for(int i = 0; i < points.size(); i++) {
+    PointIntersectionInfo* pointIntersectionData = new PointIntersectionInfo(&points[i]);
+    pointsIntersectionData.push_back(pointIntersectionData);
+  }
+
   std::vector<OptixTraversableHandle> worlds;
   std::vector<Sphere> InternalSpheres;
   float prevS = gridSize;
@@ -202,11 +204,14 @@ int main(int ac, char **av) {
   // level order traversal of BarnesHutTree
   // Create an empty queue for level order traversal
   queue<Node*> q;
-
+  
   LOG("Bulding OWL Scenes");
   // Enqueue Root and initialize height
   q.push(root);
   auto start_b = std::chrono::steady_clock::now();
+  int currentLevel = 0;
+  int numNodesPrevLevel = 0;
+  int numNodesCurrentLevel = 0;
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
@@ -214,13 +219,21 @@ int main(int ac, char **av) {
         if(!InternalSpheres.empty()) {
           worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
         }
+        numNodesPrevLevel = InternalSpheres.size();
+        numNodesCurrentLevel = 0;
         InternalSpheres.clear();
         prevS = node->s;
         gridSize = node->s;
+        currentLevel += 0;
       }
       if(node->s == gridSize) {
         if(node->mass != 0.0f) {
           InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass, false});
+          for(int i = 0; i < points.size(); i++) {
+            //pointsIntersectionData[i]->didIntersectNodes[(currentLevel * numNodesPrevLevel) + numNodesCurrentLevel] = false;
+            //pointsIntersectionData[i]->bhNodes[(currentLevel * numNodesPrevLevel) + numNodesCurrentLevel] = node;
+            numNodesCurrentLevel++;
+          }
         }
       }
       q.pop();
@@ -254,16 +267,6 @@ int main(int ac, char **av) {
   std::cout << "Worlds size:" << worlds.size() << std::endl;
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
-  
-
-  std::vector<IntersectionInfo*> allIntersections;
-
-  for(int i = 0; i < worlds.size(); i++) {
-    IntersectionInfo* levelIntersectionData = new IntersectionInfo[points.size()];
-    for(int j = 0; j < points.size(); j++) {
-      levelIntersectionData[j].origin = points[j];
-    }
-  }
 
   // -------------------------------------------------------
   // set up ray gen program
@@ -296,7 +299,7 @@ int main(int ac, char **av) {
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 1);
-  //owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
+  owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
 
   auto end1 = std::chrono::steady_clock::now();
   auto elapsed1 =
@@ -326,6 +329,10 @@ int main(int ac, char **av) {
   // ##################################################################
   // and finally, clean up
   // ##################################################################
+  auto total_run_time_end = std::chrono::steady_clock::now();
+  auto elapsed_run_time_end = std::chrono::duration_cast<std::chrono::microseconds>(total_run_time_end - total_run_time);
+  std::cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
+            << std::endl;
   LOG("destroying devicegroup ...");
   owlContextDestroy(context);
 }

@@ -20,14 +20,13 @@
 namespace owl {
 
 
-  struct IntersectionInfo {
-    Point *origin;
-    Node *intersected;
-  };
+  struct PointIntersectionInfo {
+    Point *body; // a single body's information
+    bool *didIntersectNodes; // 2d array [level in BH tree, bool]
+    Node **bhNodes; // 2d array [level in BH tree, node]
 
-	struct Storage {
-		int *neigh;
-	};
+    PointIntersectionInfo(Point *point);
+  };
 
   // ==================================================================
   /* the raw geometric shape of a sphere, without material - this is
