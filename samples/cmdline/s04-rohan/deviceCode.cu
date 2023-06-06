@@ -62,7 +62,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   }
   const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
   Sphere self = selfs.prims[primID];
-  float &prd = getPRD<float>();
+  PerRayData &prd = owl::getPRD<PerRayData>();
   
   
   //Inside circle?
@@ -74,8 +74,12 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   // y = self.center.y - org.y;
   // z = self.center.z - org.z;
 
-  //if(self.isLeaf == false) 
-    //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f, color = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass, prd);
+  if(self.isLeaf == false) {
+    printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
+    Node *bhNode = nullptr;
+    //prd.out.pointIntersectionData->didIntersectNodes[]
+  }
+    
 }
 
 // ==================================================================
@@ -85,10 +89,12 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 OPTIX_RAYGEN_PROGRAM(rayGen)()
 {
 	const RayGenData &self = owl::getProgramData<RayGenData>();
-	float level = 1.0f;  
 	int xID = optixGetLaunchIndex().x;
   int yID = optixGetLaunchIndex().y;
 	owl::Ray ray(vec3f(self.points[xID].x,self.points[xID].y,0), vec3f(0,0,1), 0, 1.e-16f);
+  PerRayData prd;
+  prd.pointIdx = xID;
+  prd.level = yID;
   //printf("Level: %d \n", optixLaunchParams.yIDx);
   //printf("Starting ray for level %d with index: %d\n", yID, xID);
   //printf("Starting ray in level %d at circle with center x = %f, y = %f \n", yID, self.points[xID].x, self.points[xID].y);
@@ -96,6 +102,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     yID = optixLaunchParams.yIDx;
   }
   //printf("Starting ray for level %d with index: %d\n", yID, xID);
-  owl::traceRay(self.worlds[yID], ray, level);
+  owl::traceRay(self.worlds[yID], ray, prd);
+  //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
 }
 

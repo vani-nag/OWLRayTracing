@@ -70,7 +70,7 @@ float threshold = 0.5f;
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
-PointIntersectionInfo::PointIntersectionInfo(Point *point) : body(point), didIntersectNodes(nullptr), bhNodes(nullptr) {}
+PointIntersectionInfo::PointIntersectionInfo(Point *point) : body(point) {}
 
 OWLVarDecl SpheresGeomVars[] = {
     {"prims", OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom, prims)},
@@ -139,7 +139,7 @@ int main(int ac, char **av) {
   Node* root = new Node(0.f, 0.f, gridSize);
 
   // Generate random points
-  int numPoints = 3;  // Specify the number of points
+  int numPoints = 2;  // Specify the number of points
 
   std::vector<Point> points;
 
@@ -199,6 +199,7 @@ int main(int ac, char **av) {
 
   std::vector<OptixTraversableHandle> worlds;
   std::vector<Sphere> InternalSpheres;
+  std::vector<Node*> InternalNodes;
   float prevS = gridSize;
 
   // level order traversal of BarnesHutTree
@@ -209,31 +210,27 @@ int main(int ac, char **av) {
   // Enqueue Root and initialize height
   q.push(root);
   auto start_b = std::chrono::steady_clock::now();
-  int currentLevel = 0;
-  int numNodesPrevLevel = 0;
-  int numNodesCurrentLevel = 0;
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
       if((node->s != prevS)) {
         if(!InternalSpheres.empty()) {
           worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
+          for(int i = 0; i < points.size(); i++) {
+            std::vector<bool> boolVector(InternalSpheres.size(), false);
+            pointsIntersectionData[i]->didIntersectNodes.push_back(boolVector);
+            pointsIntersectionData[i]->bhNodes.push_back(InternalNodes);
+          }
         }
-        numNodesPrevLevel = InternalSpheres.size();
-        numNodesCurrentLevel = 0;
         InternalSpheres.clear();
+        InternalNodes.clear();
         prevS = node->s;
         gridSize = node->s;
-        currentLevel += 0;
       }
       if(node->s == gridSize) {
         if(node->mass != 0.0f) {
           InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass, false});
-          for(int i = 0; i < points.size(); i++) {
-            //pointsIntersectionData[i]->didIntersectNodes[(currentLevel * numNodesPrevLevel) + numNodesCurrentLevel] = false;
-            //pointsIntersectionData[i]->bhNodes[(currentLevel * numNodesPrevLevel) + numNodesCurrentLevel] = node;
-            numNodesCurrentLevel++;
-          }
+          InternalNodes.push_back(node);
         }
       }
       q.pop();
@@ -257,7 +254,27 @@ int main(int ac, char **av) {
 
   if(!InternalSpheres.empty()) {
     worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
+    for(int i = 0; i < points.size(); i++) {
+      std::vector<bool> boolVector(InternalSpheres.size(), false);
+      pointsIntersectionData[i]->didIntersectNodes.push_back(boolVector);
+      pointsIntersectionData[i]->bhNodes.push_back(InternalNodes);
+    }
   }
+
+  OWLBuffer IntersectionsBuffer = owlDeviceBufferCreate(
+     context, OWL_USER_TYPE(pointsIntersectionData[0]), pointsIntersectionData.size(), pointsIntersectionData.data());
+
+  // for(int i = 0; i < points.size(); i++) {
+  //   LOG_OK("Point #: " << i + 1);
+  //   for(int k = 0; k < worlds.size(); k++) {
+  //     LOG("Level #: " << k + 1);
+  //     for(int j = 0; j < pointsIntersectionData[i]->didIntersectNodes[k].size(); j++) {
+  //       std::cout << "didIntersect is: " << std::boolalpha << pointsIntersectionData[i]->didIntersectNodes[k][j] << std::endl;
+  //       Node *tempNode = pointsIntersectionData[i]->bhNodes[k][j];
+  //       std::cout << "Node: Mass = " << tempNode->mass << ", Center of Mass = (" << tempNode->centerOfMassX << ", " << tempNode->centerOfMassY << ")\n";
+  //     }
+  //   }
+  // }
 
   auto end_b = std::chrono::steady_clock::now();
   auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
@@ -274,6 +291,7 @@ int main(int ac, char **av) {
   OWLVarDecl rayGenVars[] = {
       //{"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
       {"points", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, points)},
+      {"pointsIntersectionData", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, pointsIntersectionData)},
       {"fbSize", OWL_INT2, OWL_OFFSETOF(RayGenData, fbSize)},
       {"worlds", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, worlds)},
       {/* sentinel to mark end of list */}};
@@ -284,6 +302,7 @@ int main(int ac, char **av) {
 
   // ----------- set variables  ----------------------------
   owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
+  owlRayGenSetBuffer(rayGen, "pointsIntersectionData", IntersectionsBuffer);
   owlRayGenSet2i(rayGen, "fbSize", (const owl2i &)fbSize);
   owlRayGenSetBuffer(rayGen, "worlds", WorldsBuffer);
 
@@ -312,7 +331,7 @@ int main(int ac, char **av) {
   // ##################################################################
   auto start2 = std::chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 0);
-  for(int i = 1; i < 2; i++) {
+  for(int i = 0; i < worlds.size(); i++) {
     owlParamsSet1i(lp, "yIDx", i);
     owlLaunch2D(rayGen, points.size(), 1, lp);
   }

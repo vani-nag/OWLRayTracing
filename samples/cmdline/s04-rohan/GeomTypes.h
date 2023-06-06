@@ -14,16 +14,19 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "Materials.h"
+#pragma once
+
+#include <owl/owl.h>
 #include "barnesHutTree.h"
+#include <vector>
 
-namespace owl {
-
+using namespace owl;
+using namespace std;
 
   struct PointIntersectionInfo {
     Point *body; // a single body's information
-    bool *didIntersectNodes; // 2d array [level in BH tree, bool]
-    Node **bhNodes; // 2d array [level in BH tree, node]
+    vector<vector<bool>> didIntersectNodes; // 2d array [level in BH tree, bool]
+    vector<vector<Node*>> bhNodes; // 2d array [level in BH tree, node]
 
     PointIntersectionInfo(Point *point);
   };
@@ -53,11 +56,16 @@ namespace owl {
     vec2i  fbSize;
     OptixTraversableHandle *worlds;
     Point *points;
+    PointIntersectionInfo *pointsIntersectionData;
   };
 
-  struct MissProgData
+  struct PerRayData
   {
-    /* nothing in this example */
+    int pointIdx;
+    int level;
+    struct {
+      PointIntersectionInfo *pointIntersectionData;
+    } out;
   };
 
 	struct MyGlobals 
@@ -66,4 +74,3 @@ namespace owl {
     int parallelLaunch;
 	};
 
-}
