@@ -25,6 +25,17 @@ namespace owl {
     Node* se;
 
     Node(float x, float y, float s);
+
+    Node() {
+      mass = 0;
+      s = 0;
+      centerOfMassX = 0;
+      centerOfMassY = 0;
+      nw = nullptr;
+      ne = nullptr;
+      sw = nullptr;
+      se = nullptr;
+    }
   };
 
   class BarnesHutTree {

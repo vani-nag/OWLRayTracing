@@ -19,17 +19,41 @@
 #include <owl/owl.h>
 #include "barnesHutTree.h"
 #include <vector>
+constexpr int NODES = 256;
+constexpr int LEVELS = 10;
 
 using namespace owl;
 using namespace std;
 
   struct PointIntersectionInfo {
-    Point *body; // a single body's information
-    vector<vector<bool>> didIntersectNodes; // 2d array [level in BH tree, bool]
-    vector<vector<Node*>> bhNodes; // 2d array [level in BH tree, node]
+    Point body; // a single body's information
+    uint8_t didIntersectNodes[NODES]; // 1d array [bool]
+    Node bhNodes[NODES]; // 1d array [node]
 
-    PointIntersectionInfo(Point *point);
+    PointIntersectionInfo() {
+      //body = nullptr;
+      for(int i = 0; i < NODES; i++) {
+        didIntersectNodes[i] = 0;
+        //bhNodes[i] = nullptr;
+      }
+    }
   };
+
+  struct LevelIntersectionInfo {
+    int level;
+    PointIntersectionInfo pointIntersectionInfo[LEVELS];
+
+    LevelIntersectionInfo() {
+      level = 0;
+      for(int i = 0; i < LEVELS; i++) {
+        pointIntersectionInfo[i] = PointIntersectionInfo();
+      }
+    }
+  }; 
+
+  // struct IntersectionsGeom {
+  //   LevelIntersectionInfo *levels;
+  // };
 
   // ==================================================================
   /* the raw geometric shape of a sphere, without material - this is
@@ -56,7 +80,6 @@ using namespace std;
     vec2i  fbSize;
     OptixTraversableHandle *worlds;
     Point *points;
-    PointIntersectionInfo *pointsIntersectionData;
   };
 
   struct PerRayData
@@ -64,7 +87,7 @@ using namespace std;
     int pointIdx;
     int level;
     struct {
-      PointIntersectionInfo *pointIntersectionData;
+      LevelIntersectionInfo *levelIntersectionData;
     } out;
   };
 
@@ -72,5 +95,6 @@ using namespace std;
 	{	
 		int yIDx;
     int parallelLaunch;
+    LevelIntersectionInfo *levelIntersectionData;
 	};
 
