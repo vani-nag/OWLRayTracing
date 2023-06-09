@@ -1,6 +1,8 @@
 #pragma once
 
 #include <owl/owl.h>
+#include <string>
+#include <vector>
 
 namespace owl {
 
@@ -23,6 +25,7 @@ namespace owl {
     Node* ne;
     Node* sw;
     Node* se;
+    bool isLeaf;
 
     Node(float x, float y, float s);
 
@@ -35,6 +38,7 @@ namespace owl {
       ne = nullptr;
       sw = nullptr;
       se = nullptr;
+      isLeaf = false;
     }
   };
 
@@ -52,7 +56,8 @@ namespace owl {
       ~BarnesHutTree();
 
       void insertNode(Node* node, const Point& point);
-      void printTree(Node* root, int depth);
+      void printTree(Node* root, int depth, std::string corner);
+      void computeForces(Node* node, std::vector<Point> points);
       //void calculateCenterOfMass();
   };
 }

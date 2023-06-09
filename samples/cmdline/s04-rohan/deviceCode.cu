@@ -62,6 +62,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   }
   const SpheresGeom &selfs = owl::getProgramData<SpheresGeom>();
   Sphere self = selfs.prims[primID];
+  float radius = selfs.rad;
   PerRayData &prd = owl::getPRD<PerRayData>();
   
   
@@ -74,14 +75,12 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   // y = self.center.y - org.y;
   // z = self.center.z - org.z;
 
-  if(self.isLeaf == false) {
-    //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
-    //LevelIntersectionInfo levelInfo = prd.out.levelIntersectionData[level];
-    optixLaunchParams.levelIntersectionData[level].pointIntersectionInfo[xID].didIntersectNodes[primID] = 1;
-    //printf("Body x is %f and y is %f \n", body.x, body.y);
-    //printf("Node has x = %f, y = %f, z = %f , mass = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, 0, bhNode.mass);
-    printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
-  }
+  //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
+  //LevelIntersectionInfo levelInfo = prd.out.levelIntersectionData[level];
+  optixLaunchParams.levelIntersectionData[level].pointIntersectionInfo[xID].didIntersectNodes[primID] = 1;
+  //printf("Body x is %f and y is %f \n", body.x, body.y);
+  //printf("Node has x = %f, y = %f, z = %f , mass = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, 0, bhNode.mass);
+  //printf("Ray %d in level %d with s = %f intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, radius, self.center.x, self.center.y, self.center.z, self.mass);
     
 }
 

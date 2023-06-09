@@ -1,5 +1,10 @@
 #include "barnesHutTree.h"
 #include <iostream>
+#include <cmath>
+#include <iostream>
+
+#define THRESHOLD 0.5f
+#define GRAVITATIONAL_CONSTANT 20.0f
 
 using namespace owl;
 
@@ -79,7 +84,7 @@ void BarnesHutTree::splitNode(Node* node) {
   }
 }
 
-void BarnesHutTree::printTree(Node* node, int depth = 0) {
+void BarnesHutTree::printTree(Node* node, int depth = 0, std::string corner = "none") {
     if (node == nullptr) {
         return;
     }
@@ -92,11 +97,64 @@ void BarnesHutTree::printTree(Node* node, int depth = 0) {
     std::cout << "└─ ";
 
     // Print node information
-    std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
+    std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << "), corner = " << corner << "\n";
 
     // Recursively print child nodes
-    printTree(node->nw, depth + 1);
-    printTree(node->ne, depth + 1);
-    printTree(node->se, depth + 1);
-    printTree(node->sw, depth + 1);
+    printTree(node->nw, depth + 1, "nw");
+    printTree(node->ne, depth + 1, "ne");
+    printTree(node->sw, depth + 1, "sw");
+    printTree(node->se, depth + 1, "se");
+}
+
+float distanceBetweenObjects(Point point, Node *bhNode) {
+  // distance calculation
+  float dx = point.x - bhNode->centerOfMassX;
+  float dy = point.y - bhNode->centerOfMassY;
+  float r_2 = (dx * dx) + (dy * dy);
+
+  return std::sqrt(r_2);
+}
+
+float computeObjectsAttractionForce(Point point, Node *bhNode) {
+  float mass_one = point.mass;
+  float mass_two = bhNode->mass;
+
+  // distance calculation
+  float dx = point.x - bhNode->centerOfMassX;
+  float dy = point.y - bhNode->centerOfMassY;
+  float r_2 = (dx * dx) + (dy * dy);
+
+  return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
+}
+ 
+float force_on(Point point, Node* node) {
+  if(node->nw == nullptr) {
+    //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
+    if(point.x != node->centerOfMassX && point.y != node->centerOfMassY) {
+      return computeObjectsAttractionForce(point, node);
+    } else {
+      return 0;
+    }
+  }
+
+  if(node->s < distanceBetweenObjects(point, node) * THRESHOLD) {
+    return computeObjectsAttractionForce(point, node);
+  }
+
+  float totalForce = 0;
+  totalForce += force_on(point, node->nw);
+  totalForce += force_on(point, node->ne);
+  totalForce += force_on(point, node->sw);
+  totalForce += force_on(point, node->se);
+
+  return totalForce;
+}
+
+void BarnesHutTree::computeForces(Node* node, std::vector<Point> points) {
+  for(int i = 0; i < points.size(); i++) {
+    float force = 0;
+    force = force_on(points[i], node);
+    printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, force);
+
+  }
 }

@@ -27,6 +27,7 @@
 #include "stb/stb_image_write.h"
 #include <vector>
 #include<iostream>
+#include <cmath>
 #include<fstream>
 #include <queue>
 #include<string>
@@ -41,31 +42,37 @@
 #include "barnesHutTree.h"
 
 #define LOG(message)                                            \
-  std::cout << OWL_TERMINAL_BLUE;                               \
-  std::cout << "#owl.sample(main): " << message << std::endl;    \
-  std::cout << OWL_TERMINAL_DEFAULT;
+  cout << OWL_TERMINAL_BLUE;                               \
+  cout << "#owl.sample(main): " << message << endl;    \
+  cout << OWL_TERMINAL_DEFAULT;
 #define LOG_OK(message)                                         \
-  std::cout << OWL_TERMINAL_LIGHT_BLUE;                         \
-  std::cout << "#owl.sample(main): " << message << std::endl;    \
-  std::cout << OWL_TERMINAL_DEFAULT;
+  cout << OWL_TERMINAL_LIGHT_BLUE;                         \
+  cout << "#owl.sample(main): " << message << endl;    \
+  cout << OWL_TERMINAL_DEFAULT;
+
+#define GRID_SIZE 10.0f
+#define THRESHOLD 0.5f
+#define NUM_POINTS 4
+#define GRAVITATIONAL_CONSTANT 20.0f
 
 extern "C" char deviceCode_ptx[];
-const vec3f lookFrom(13, 2, 3);
-const vec3f lookAt(0, 0, 0);
-const vec3f lookUp(0.f,1.f,0.f);
-const float fovy = 20.f;
 
 // random init
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_real_distribution<float> dis(-100.0f, 100.0f);  // Range for X and Y coordinates
-std::uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
+random_device rd;
+mt19937 gen(rd());
+uniform_real_distribution<float> dis(-5.0f, 5.0f);  // Range for X and Y coordinates
+uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
 
 // global variables
 int deviceID;
 vec2f fbSize;
-float gridSize = 200.0f;
-float threshold = 0.5f;
+float gridSize = GRID_SIZE;
+
+// force calculation global variables
+vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
+vector<int> nodesPerLevel;
+vector<float> computedForces(NUM_POINTS, 0.0f);
+vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
@@ -90,7 +97,7 @@ OWLGeomType SpheresGeomType = owlGeomTypeCreate(
 // ##################################################################
 // Create world function
 // ##################################################################
-OptixTraversableHandle createSceneGivenGeometries(std::vector<Sphere> Spheres, float spheresRadius) {
+OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float spheresRadius) {
   // Init Frame Buffer. Don't need 2D threads, so just use x-dim for threadId
   fbSize = vec2f(Spheres.size(), 1);
 
@@ -135,29 +142,105 @@ size_t calculateQuadTreeSize(Node* node) {
     return size;
 }
 
+float computeObjectsAttractionForce(Point point, Node bhNode) {
+  float mass_one = point.mass;
+  float mass_two = bhNode.mass;
+
+  // distance calculation
+  float dx = point.x - bhNode.centerOfMassX;
+  float dy = point.y - bhNode.centerOfMassY;
+  float r_2 = (dx * dx) + (dy * dy);
+
+  return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
+}
+
+void computeForces(const LevelIntersectionInfo *intersectionsOutputData, vector<Point> points, int levelIdx) {
+  printf("==========================================\n");
+  for(int i = 2; i < NUM_POINTS; i++) {
+    printf("++++++++++++++++++++++++++++++++++++++++\n");
+    printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
+    for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
+      if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
+        Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+        float radius = (GRID_SIZE / pow(2, levelIdx)) / THRESHOLD;
+        printf("Intersected bhNode with x = %f, y = %f, mass = %f, radius = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass, radius);
+      }
+    }
+  }
+  printf("==========================================\n");
+
+  vector<NodePersistenceInfo> currentPersistenceInfo;
+  for(int i = 0; i < NUM_POINTS; i++) {
+    for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
+      Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+      if(prevPersistenceInfo[i][k].dontTraverse != 1) {  // this node's parent intersected
+        if(bhNode.isLeaf == true) { // is a leaf node so always calculate force
+          //printf("Bhnode mass is %f\n", bhNode.mass);
+          if(bhNode.centerOfMassX != points[i].x && bhNode.centerOfMassY != points[i].y) { // check to make sure not computing force against itself
+            computedForces[i] += computeObjectsAttractionForce(points[i], bhNode);
+          }
+        }
+        else if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] == 0) { // didn't intersect this node so calculate force
+          computedForces[i] += computeObjectsAttractionForce(points[i], bhNode); // calculate force
+
+          // set persistence to don't traverse if node has children
+          if(bhNode.nw != nullptr) {
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
+          }
+        } else { // did intersect this node so don't calculate force
+          if(bhNode.nw != nullptr) { // this node has children so set this persistence to true
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 0));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 0));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 0));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 0));
+          }
+        }
+      } else { // parent already intersected so all children should not be computed
+        if(bhNode.nw != nullptr) {
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
+            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
+        }
+      }
+    }
+    prevPersistenceInfo[i].clear();
+    prevPersistenceInfo[i].resize(currentPersistenceInfo.size());
+    copy(currentPersistenceInfo.begin(), currentPersistenceInfo.end(), prevPersistenceInfo[i].begin());
+    currentPersistenceInfo.clear();
+  }
+}
+
 int main(int ac, char **av) {
 
-  auto total_run_time = std::chrono::steady_clock::now();
+  auto total_run_time = chrono::steady_clock::now();
+
 
   // ##################################################################
   // Building Barnes Hut Tree
   // ##################################################################
-  BarnesHutTree* tree = new BarnesHutTree(threshold, gridSize);
+  BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
 
-  // Generate random points
-  int numPoints = 2;  // Specify the number of points
+  vector<Point> points;
+  // Point p0 = {.x = 2.049f, .y = 2.062f, .mass = 18.11f, .idX=0};
+  // Point p1 = {.x = 4.173f, .y = 3.062f, .mass = 8.96f, .idX=1};
+  // Point p2 = {.x = 4.167f, .y = -3.394f, .mass = 4.60, .idX=2};
+  // points.push_back(p0);
+  // points.push_back(p1);
+  // points.push_back(p2);
 
-  std::vector<Point> points;
-
-  for (int i = 0; i < numPoints; ++i) {
+  for (int i = 0; i < NUM_POINTS; ++i) {
     Point p;
     p.x = dis(gen);
     p.y = dis(gen);
     p.mass = disMass(gen);
     p.idX = i;
     points.push_back(p);
-    printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
   }
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
@@ -165,18 +248,18 @@ int main(int ac, char **av) {
 
 
   LOG("Bulding Tree with # Of Bodies = " << points.size());
-  auto start_tree = std::chrono::steady_clock::now();
+  auto start_tree = chrono::steady_clock::now();
   for(const auto& point: points) {
     tree->insertNode(root, point);
   };
 
-  auto end_tree = std::chrono::steady_clock::now();
-  auto elapsed_tree = std::chrono::duration_cast<std::chrono::microseconds>(end_tree - start_tree);
-  std::cout << "Barnes Hut Tree Build Time: " << elapsed_tree.count() / 1000000.0 << " seconds."
-            << std::endl;
+  auto end_tree = chrono::steady_clock::now();
+  auto elapsed_tree = chrono::duration_cast<chrono::microseconds>(end_tree - start_tree);
+  cout << "Barnes Hut Tree Build Time: " << elapsed_tree.count() / 1000000.0 << " seconds."
+            << endl;
 
   //LOG("Size of tree = " << calculateQuadTreeSize(root));
-  tree->printTree(root, 0);
+  tree->printTree(root, 0, "root");
 
   // Get the device ID
   cudaGetDevice(&deviceID);
@@ -199,10 +282,10 @@ int main(int ac, char **av) {
   // Level order traversal of Barnes Hut Tree to build worlds
   // ##################################################################
 
-  std::vector<LevelIntersectionInfo> levelIntersectionData;
-  std::vector<OptixTraversableHandle> worlds;
-  std::vector<Sphere> InternalSpheres;
-  std::vector<Node> InternalNodes;
+  vector<LevelIntersectionInfo> levelIntersectionData;
+  vector<OptixTraversableHandle> worlds;
+  vector<Sphere> InternalSpheres;
+  vector<Node> InternalNodes;
   LevelIntersectionInfo levelInfo;
   float prevS = gridSize;
   int level = 0;
@@ -214,17 +297,18 @@ int main(int ac, char **av) {
   LOG("Bulding OWL Scenes");
   // Enqueue Root and initialize height
   q.push(root);
-  auto start_b = std::chrono::steady_clock::now();
+  auto start_b = chrono::steady_clock::now();
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
       if((node->s != prevS)) {
         if(!InternalSpheres.empty()) {
-          worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
+          worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+          nodesPerLevel.push_back(InternalSpheres.size());
           for(int i = 0; i < points.size(); i++) {
             levelInfo.pointIntersectionInfo[i].body = points[i];
             //levelInfo.pointIntersectionInfo[level-1].didIntersectNodes = boolArray;
-            std::copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
+            copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
           }
           levelInfo.level = level + 1;
           levelIntersectionData.push_back(levelInfo);
@@ -245,8 +329,13 @@ int main(int ac, char **av) {
       }
       if(node->s == gridSize) {
         if(node->mass != 0.0f) {
-          InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass, false});
+          if(node->ne == nullptr) {
+            node->isLeaf = true;
+          } else {
+            node->isLeaf = false;
+          }
           InternalNodes.push_back((*node));
+          InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass});
         }
       }
       q.pop();
@@ -269,11 +358,12 @@ int main(int ac, char **av) {
   }
 
   if(!InternalSpheres.empty()) {
-    worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / threshold)));
+    worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+    nodesPerLevel.push_back(InternalSpheres.size());
     for(int i = 0; i < points.size(); i++) {
       levelInfo.pointIntersectionInfo[i].body = points[i];
       //levelInfo.pointIntersectionInfo[level-1].didIntersectNodes = boolArray;
-      std::copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
+      copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
     }
     levelInfo.level = level+1;
     levelIntersectionData.push_back(levelInfo);
@@ -306,14 +396,18 @@ int main(int ac, char **av) {
   //   }
   // }
 
-  auto end_b = std::chrono::steady_clock::now();
-  auto elapsed_b = std::chrono::duration_cast<std::chrono::microseconds>(end_b - start_b);
-  std::cout << "OWL Scenes Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
-            << std::endl;
+  auto end_b = chrono::steady_clock::now();
+  auto elapsed_b = chrono::duration_cast<chrono::microseconds>(end_b - start_b);
+  cout << "OWL Scenes Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
+            << endl;
   
-  std::cout << "Worlds size:" << worlds.size() << std::endl;
+  cout << "Worlds size:" << worlds.size() << endl;
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
+  
+  // for(int p = 0; p < worlds.size(); p++) {
+  //   printf("For level %d, there are %d nodes\n", p, nodesPerLevel[p]);
+  // }
 
   // -------------------------------------------------------
   // set up ray gen program
@@ -359,45 +453,54 @@ int main(int ac, char **av) {
   // ##################################################################
   // Start Ray Tracing Series launch
   // ##################################################################
-  auto start2 = std::chrono::steady_clock::now();
+
+  // intersection computation info initialization
+  for(int i = 0; i < NUM_POINTS; i++) {
+    vector<NodePersistenceInfo> prevPersistenceInfoForAPoint(4, NodePersistenceInfo());
+    prevPersistenceInfo.push_back(prevPersistenceInfoForAPoint);
+  }
+
+  auto start2 = chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 0);
   owlParamsSetBuffer(lp, "levelIntersectionData", IntersectionsBuffer);
-  for(int l = 1; l < 2; l++) {
+  for(int l = 1; l < worlds.size(); l++) {
     owlParamsSet1i(lp, "yIDx", l);
     owlLaunch2D(rayGen, points.size(), 1, lp);
 
     // calculate forces here
     const LevelIntersectionInfo *intersectionsOutputData = (const LevelIntersectionInfo*)owlBufferGetPointer(IntersectionsBuffer,0);
-    printf("==========================================\n");
-    for(int i = 0; i < 2; i++) {
-      printf("++++++++++++++++++++++++++++++++++++++++\n");
-      printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
-      for(int k = 0; k < 4; k++) {
-        if(intersectionsOutputData[l].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
-          Node bhNode = intersectionsOutputData[l].pointIntersectionInfo[i].bhNodes[k];
-          printf("Intersected bhNode with x = %f, y = %f, mass = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass);
-        }
-      }
-    }
-    printf("==========================================\n");
+    computeForces(intersectionsOutputData, points, l);
   }
-
-  auto end2 = std::chrono::steady_clock::now();
+  auto end2 = chrono::steady_clock::now();
   auto elapsed2 =
-      std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
-  std::cout << "Intersections time for series launch: " << elapsed2.count() / 1000000.0
-            << " seconds." << std::endl;
-  
-  // const uint32_t *fb
-  //   = (const uint32_t*)owlBufferGetPointer(frameBuffer,0);
+      chrono::duration_cast<chrono::microseconds>(end2 - start2);
+  cout << "Intersections time for series launch: " << elapsed2.count() / 1000000.0
+            << " seconds." << endl;
+
+  // ##################################################################
+  // Output Force Computations
+  // ##################################################################
+
+  LOG_OK("RT CORES FORCES OUTPUT")
+  LOG_OK("++++++++++++++++++++++++");
+  for(int i = 0; i < NUM_POINTS; i++) {
+    printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, computedForces[i]);
+  }
+  LOG_OK("++++++++++++++++++++++++");
+
+  //tree->printTree(root, 0, "root");
+  LOG_OK("CPU FORCES OUTPUT")
+  LOG_OK("++++++++++++++++++++++++");
+  tree->computeForces(root, points);
+  LOG_OK("++++++++++++++++++++++++");
 
   // ##################################################################
   // and finally, clean up
   // ##################################################################
-  auto total_run_time_end = std::chrono::steady_clock::now();
-  auto elapsed_run_time_end = std::chrono::duration_cast<std::chrono::microseconds>(total_run_time_end - total_run_time);
-  std::cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
-            << std::endl;
+  auto total_run_time_end = chrono::steady_clock::now();
+  auto elapsed_run_time_end = chrono::duration_cast<chrono::microseconds>(total_run_time_end - total_run_time);
+  cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
+            << endl;
   LOG("destroying devicegroup ...");
   owlContextDestroy(context);
 }

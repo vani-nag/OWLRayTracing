@@ -51,6 +51,20 @@ using namespace std;
     }
   }; 
 
+  struct NodePersistenceInfo {
+    Node bhNode;
+    uint8_t dontTraverse;
+
+    NodePersistenceInfo() {
+      dontTraverse = 0;
+    }
+
+    NodePersistenceInfo(Node node, uint8_t value) {
+      bhNode = node;
+      dontTraverse = value;
+    }
+  };
+
   // struct IntersectionsGeom {
   //   LevelIntersectionInfo *levels;
   // };
@@ -62,7 +76,6 @@ using namespace std;
   struct Sphere {
     vec3f center;
     float mass;
-    bool isLeaf; 
   };
 
   struct SpheresGeom {
