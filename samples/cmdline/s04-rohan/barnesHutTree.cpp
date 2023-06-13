@@ -3,8 +3,6 @@
 #include <cmath>
 #include <iostream>
 
-#define THRESHOLD 0.5f
-#define GRAVITATIONAL_CONSTANT 20.0f
 
 using namespace owl;
 
@@ -55,11 +53,12 @@ void BarnesHutTree::splitNode(Node* node) {
   float x = node->quadrantX;
   float y = node->quadrantY;
   float s = node->s / 2.0;
+  float quadrantOperand = s / 2.0;
   
-  node->nw = new Node(x - s, y + s, s);
-  node->ne = new Node(x + s, y + s, s);
-  node->sw = new Node(x - s, y - s, s);
-  node->se = new Node(x + s, y - s, s);
+  node->nw = new Node(x - quadrantOperand, y + quadrantOperand, s);
+  node->ne = new Node(x + quadrantOperand, y + quadrantOperand, s);
+  node->sw = new Node(x - quadrantOperand, y - quadrantOperand, s);
+  node->se = new Node(x + quadrantOperand, y - quadrantOperand, s);
 
   if(node->centerOfMassX < node->quadrantX) {
     if(node->centerOfMassY < node->quadrantY) {
@@ -97,7 +96,7 @@ void BarnesHutTree::printTree(Node* node, int depth = 0, std::string corner = "n
     std::cout << "└─ ";
 
     // Print node information
-    std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << "), corner = " << corner << "\n";
+    std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << "), quadrant = (" << node->quadrantX << ", " << node->quadrantY << "), corner = " << corner << "\n";
 
     // Recursively print child nodes
     printTree(node->nw, depth + 1, "nw");
@@ -155,6 +154,5 @@ void BarnesHutTree::computeForces(Node* node, std::vector<Point> points) {
     float force = 0;
     force = force_on(points[i], node);
     printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, force);
-
   }
 }

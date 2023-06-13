@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+#define GRID_SIZE 10.0f
+#define THRESHOLD 0.5f
+#define GRAVITATIONAL_CONSTANT 1.0f
+
 namespace owl {
 
   struct Point {

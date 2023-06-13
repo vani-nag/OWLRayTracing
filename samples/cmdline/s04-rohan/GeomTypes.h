@@ -19,7 +19,7 @@
 #include <owl/owl.h>
 #include "barnesHutTree.h"
 #include <vector>
-constexpr int NODES = 256;
+constexpr int NODES = 1024;
 constexpr int LEVELS = 10;
 
 using namespace owl;

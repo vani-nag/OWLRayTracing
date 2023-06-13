@@ -50,10 +50,7 @@
   cout << "#owl.sample(main): " << message << endl;    \
   cout << OWL_TERMINAL_DEFAULT;
 
-#define GRID_SIZE 10.0f
-#define THRESHOLD 0.5f
-#define NUM_POINTS 4
-#define GRAVITATIONAL_CONSTANT 20.0f
+#define NUM_POINTS 5
 
 extern "C" char deviceCode_ptx[];
 
@@ -155,19 +152,19 @@ float computeObjectsAttractionForce(Point point, Node bhNode) {
 }
 
 void computeForces(const LevelIntersectionInfo *intersectionsOutputData, vector<Point> points, int levelIdx) {
-  printf("==========================================\n");
-  for(int i = 2; i < NUM_POINTS; i++) {
-    printf("++++++++++++++++++++++++++++++++++++++++\n");
-    printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
-    for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
-      if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
-        Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
-        float radius = (GRID_SIZE / pow(2, levelIdx)) / THRESHOLD;
-        printf("Intersected bhNode with x = %f, y = %f, mass = %f, radius = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass, radius);
-      }
-    }
-  }
-  printf("==========================================\n");
+  // printf("==========================================\n");
+  // for(int i = 2; i < NUM_POINTS; i++) {
+  //   printf("++++++++++++++++++++++++++++++++++++++++\n");
+  //   printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
+  //   for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
+  //     if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
+  //       Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+  //       float radius = (GRID_SIZE / pow(2, levelIdx)) / THRESHOLD;
+  //       printf("Intersected bhNode with x = %f, y = %f, mass = %f, radius = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass, radius);
+  //     }
+  //   }
+  // }
+  // printf("==========================================\n");
 
   vector<NodePersistenceInfo> currentPersistenceInfo;
   for(int i = 0; i < NUM_POINTS; i++) {
@@ -226,12 +223,14 @@ int main(int ac, char **av) {
   Node* root = new Node(0.f, 0.f, gridSize);
 
   vector<Point> points;
-  // Point p0 = {.x = 2.049f, .y = 2.062f, .mass = 18.11f, .idX=0};
-  // Point p1 = {.x = 4.173f, .y = 3.062f, .mass = 8.96f, .idX=1};
-  // Point p2 = {.x = 4.167f, .y = -3.394f, .mass = 4.60, .idX=2};
+  // Point p0 = {.x = 2.989f, .y = 1.529f, .mass = 10.718f, .idX=0};
+  // Point p1 = {.x = 3.983f, .y = -1.682f, .mass = 7.120f, .idX=1};
+  // Point p2 = {.x = 3.395f, .y = -3.894f, .mass = 3.535, .idX=2};
+  // Point p3 = {.x = 4.623f, .y = 3.271f, .mass = 4.552, .idX=3};
   // points.push_back(p0);
   // points.push_back(p1);
   // points.push_back(p2);
+  // points.push_back(p3);
 
   for (int i = 0; i < NUM_POINTS; ++i) {
     Point p;
@@ -259,7 +258,7 @@ int main(int ac, char **av) {
             << endl;
 
   //LOG("Size of tree = " << calculateQuadTreeSize(root));
-  tree->printTree(root, 0, "root");
+  //tree->printTree(root, 0, "root");
 
   // Get the device ID
   cudaGetDevice(&deviceID);
@@ -301,6 +300,7 @@ int main(int ac, char **av) {
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
+      //LOG("REACHED!");
       if((node->s != prevS)) {
         if(!InternalSpheres.empty()) {
           worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
@@ -324,6 +324,7 @@ int main(int ac, char **av) {
         prevS = node->s;
         gridSize = node->s;
         level += 1;
+        //cout << "Level hit is : " << level << endl;
       } else {
         //LOG_OK("HITS THIS!");
       }
@@ -474,7 +475,7 @@ int main(int ac, char **av) {
   auto end2 = chrono::steady_clock::now();
   auto elapsed2 =
       chrono::duration_cast<chrono::microseconds>(end2 - start2);
-  cout << "Intersections time for series launch: " << elapsed2.count() / 1000000.0
+  cout << "Intersections + calculation time for series launch: " << elapsed2.count() / 1000000.0
             << " seconds." << endl;
 
   // ##################################################################
@@ -491,7 +492,13 @@ int main(int ac, char **av) {
   //tree->printTree(root, 0, "root");
   LOG_OK("CPU FORCES OUTPUT")
   LOG_OK("++++++++++++++++++++++++");
+  //auto cpuforcesstart = chrono::steady_clock::now();
   tree->computeForces(root, points);
+  //auto cpuforcesend = chrono::steady_clock::now();
+  // auto cpuforceselapsed =
+  //     chrono::duration_cast<chrono::microseconds>(cpuforcesend - cpuforcesstart);
+  // cout << "Cpu forces calculation time: " << cpuforceselapsed.count() / 1000000.0
+  //           << " seconds." << endl;
   LOG_OK("++++++++++++++++++++++++");
 
   // ##################################################################
