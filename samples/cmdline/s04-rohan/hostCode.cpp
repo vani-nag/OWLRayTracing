@@ -50,7 +50,7 @@
   cout << "#owl.sample(main): " << message << endl;    \
   cout << OWL_TERMINAL_DEFAULT;
 
-#define NUM_POINTS 5
+#define NUM_POINTS 300
 
 extern "C" char deviceCode_ptx[];
 
@@ -67,6 +67,8 @@ float gridSize = GRID_SIZE;
 
 // force calculation global variables
 vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
+vector<vector<Node>> bhNodes;
+int totalNumNodes = 0;
 vector<int> nodesPerLevel;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
@@ -153,12 +155,13 @@ float computeObjectsAttractionForce(Point point, Node bhNode) {
 
 void computeForces(const LevelIntersectionInfo *intersectionsOutputData, vector<Point> points, int levelIdx) {
   // printf("==========================================\n");
-  // for(int i = 2; i < NUM_POINTS; i++) {
+  // for(int i = 1; i < 2; i++) {
   //   printf("++++++++++++++++++++++++++++++++++++++++\n");
   //   printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
   //   for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
   //     if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
-  //       Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+  //       // Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+  //          Node bhNode = bhNodes[levelIdx][k];
   //       float radius = (GRID_SIZE / pow(2, levelIdx)) / THRESHOLD;
   //       printf("Intersected bhNode with x = %f, y = %f, mass = %f, radius = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass, radius);
   //     }
@@ -169,7 +172,9 @@ void computeForces(const LevelIntersectionInfo *intersectionsOutputData, vector<
   vector<NodePersistenceInfo> currentPersistenceInfo;
   for(int i = 0; i < NUM_POINTS; i++) {
     for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
-      Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+      //if(i == 1) printf("Point %d, Node COM = (%f, %f), dontTraverse = %d, didIntersect = %d\n", i, bhNodes[levelIdx][k].centerOfMassX, bhNodes[levelIdx][k].centerOfMassY, prevPersistenceInfo[i][k].dontTraverse, intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k]);
+      //Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
+      Node bhNode = bhNodes[levelIdx][k];
       if(prevPersistenceInfo[i][k].dontTraverse != 1) {  // this node's parent intersected
         if(bhNode.isLeaf == true) { // is a leaf node so always calculate force
           //printf("Bhnode mass is %f\n", bhNode.mass);
@@ -182,25 +187,25 @@ void computeForces(const LevelIntersectionInfo *intersectionsOutputData, vector<
 
           // set persistence to don't traverse if node has children
           if(bhNode.nw != nullptr) {
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
+            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
+            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
+            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
+            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
           }
         } else { // did intersect this node so don't calculate force
           if(bhNode.nw != nullptr) { // this node has children so set this persistence to true
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 0));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 0));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 0));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 0));
+            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 0));
+            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 0));
+            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 0));
+            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 0));
           }
         }
       } else { // parent already intersected so all children should not be computed
         if(bhNode.nw != nullptr) {
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
-            currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
+            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
+            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
+            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
+            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
         }
       }
     }
@@ -223,14 +228,16 @@ int main(int ac, char **av) {
   Node* root = new Node(0.f, 0.f, gridSize);
 
   vector<Point> points;
-  // Point p0 = {.x = 2.989f, .y = 1.529f, .mass = 10.718f, .idX=0};
-  // Point p1 = {.x = 3.983f, .y = -1.682f, .mass = 7.120f, .idX=1};
-  // Point p2 = {.x = 3.395f, .y = -3.894f, .mass = 3.535, .idX=2};
-  // Point p3 = {.x = 4.623f, .y = 3.271f, .mass = 4.552, .idX=3};
+  // Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
+  // Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
+  // Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
+  // Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
+  // Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
   // points.push_back(p0);
   // points.push_back(p1);
   // points.push_back(p2);
   // points.push_back(p3);
+  // points.push_back(p4);
 
   for (int i = 0; i < NUM_POINTS; ++i) {
     Point p;
@@ -305,17 +312,10 @@ int main(int ac, char **av) {
         if(!InternalSpheres.empty()) {
           worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
           nodesPerLevel.push_back(InternalSpheres.size());
-          for(int i = 0; i < points.size(); i++) {
-            levelInfo.pointIntersectionInfo[i].body = points[i];
-            //levelInfo.pointIntersectionInfo[level-1].didIntersectNodes = boolArray;
-            copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
-          }
+          bhNodes.push_back(InternalNodes);
+
           levelInfo.level = level + 1;
           levelIntersectionData.push_back(levelInfo);
-          // Point body = levelIntersectionData[level].pointIntersectionInfo[0].body;
-          // printf("Level is %d, Body x is %f and y is %f \n", level+1, body.x, body.y);
-          // body = levelIntersectionData[level].pointIntersectionInfo[1].body;
-          // printf("Level is %d, Body x is %f and y is %f \n", level+1, body.x, body.y);
         } else {
           LOG_OK("Spheres r empty!");
         }
@@ -324,7 +324,6 @@ int main(int ac, char **av) {
         prevS = node->s;
         gridSize = node->s;
         level += 1;
-        //cout << "Level hit is : " << level << endl;
       } else {
         //LOG_OK("HITS THIS!");
       }
@@ -336,6 +335,7 @@ int main(int ac, char **av) {
             node->isLeaf = false;
           }
           InternalNodes.push_back((*node));
+          totalNumNodes += 1;
           InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass});
         }
       }
@@ -361,26 +361,12 @@ int main(int ac, char **av) {
   if(!InternalSpheres.empty()) {
     worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
     nodesPerLevel.push_back(InternalSpheres.size());
-    for(int i = 0; i < points.size(); i++) {
-      levelInfo.pointIntersectionInfo[i].body = points[i];
-      //levelInfo.pointIntersectionInfo[level-1].didIntersectNodes = boolArray;
-      copy(InternalNodes.begin(), InternalNodes.end(), levelInfo.pointIntersectionInfo[i].bhNodes);
-    }
+    bhNodes.push_back(InternalNodes);
+
     levelInfo.level = level+1;
     levelIntersectionData.push_back(levelInfo);
-    // Point body = levelIntersectionData[level].pointIntersectionInfo[0].body;
-    // printf("Level is %d, Body x is %f and y is %f \n", level+1, body.x, body.y);
-    // body = levelIntersectionData[level].pointIntersectionInfo[1].body;
-    // printf("Level is %d, Body x is %f and y is %f \n", level+1, body.x, body.y);
   }
 
-  // printf("++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-  // for(int z = 0; z < level+1; z++) {
-  //   Point body = levelIntersectionData.data()[z].pointIntersectionInfo[0].body;
-  //   printf("Level is %d, Body x is %f and y is %f \n", z+1, body.x, body.y);
-  //   body = levelIntersectionData.data()[z].pointIntersectionInfo[1].body;
-  //   printf("Level is %d, Body x is %f and y is %f \n", z+1, body.x, body.y);
-  // }
 
   OWLBuffer IntersectionsBuffer = owlManagedMemoryBufferCreate( 
      context, OWL_USER_TYPE(levelIntersectionData[0]), levelIntersectionData.size(), levelIntersectionData.data());
@@ -402,7 +388,9 @@ int main(int ac, char **av) {
   cout << "OWL Scenes Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
             << endl;
   
-  cout << "Worlds size:" << worlds.size() << endl;
+  LOG_OK("Number of Worlds: " << worlds.size());
+  LOG_OK("Total number of non-empty BH Nodes: " << totalNumNodes);
+
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
   
@@ -481,25 +469,35 @@ int main(int ac, char **av) {
   // ##################################################################
   // Output Force Computations
   // ##################################################################
+  // compute real forces using cpu BH traversal
+  auto cpuforcesstart = chrono::steady_clock::now();
+  tree->computeForces(root, points, cpuComputedForces);
+  auto cpuforcesend = chrono::steady_clock::now();
+  auto cpuforceselapsed = chrono::duration_cast<chrono::microseconds>(cpuforcesend - cpuforcesstart);
+  cout << "Cpu forces calculation time: " << cpuforceselapsed.count() / 1000000.0
+            << " seconds." << endl;
 
-  LOG_OK("RT CORES FORCES OUTPUT")
-  LOG_OK("++++++++++++++++++++++++");
+
   for(int i = 0; i < NUM_POINTS; i++) {
-    printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, computedForces[i]);
+    float percent_error = (abs((computedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+    if(percent_error > 1.0f) {
+      LOG_OK("++++++++++++++++++++++++");
+      LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+      LOG_OK("++++++++++++++++++++++++");
+      printf("RT force = %f\n", computedForces[i]);
+      printf("CPU force = %f\n", cpuComputedForces[i]);
+      LOG_OK("++++++++++++++++++++++++");
+      printf("\n");
+    }
   }
-  LOG_OK("++++++++++++++++++++++++");
 
   //tree->printTree(root, 0, "root");
-  LOG_OK("CPU FORCES OUTPUT")
-  LOG_OK("++++++++++++++++++++++++");
   //auto cpuforcesstart = chrono::steady_clock::now();
-  tree->computeForces(root, points);
   //auto cpuforcesend = chrono::steady_clock::now();
   // auto cpuforceselapsed =
   //     chrono::duration_cast<chrono::microseconds>(cpuforcesend - cpuforcesstart);
   // cout << "Cpu forces calculation time: " << cpuforceselapsed.count() / 1000000.0
   //           << " seconds." << endl;
-  LOG_OK("++++++++++++++++++++++++");
 
   // ##################################################################
   // and finally, clean up

@@ -61,7 +61,7 @@ namespace owl {
 
       void insertNode(Node* node, const Point& point);
       void printTree(Node* root, int depth, std::string corner);
-      void computeForces(Node* node, std::vector<Point> points);
+      void computeForces(Node* node, std::vector<Point> points, std::vector<float>& cpuComputedForces);
       //void calculateCenterOfMass();
   };
 }

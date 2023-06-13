@@ -19,22 +19,18 @@
 #include <owl/owl.h>
 #include "barnesHutTree.h"
 #include <vector>
-constexpr int NODES = 1024;
-constexpr int LEVELS = 10;
+constexpr int NODES = 4096;
+constexpr int LEVELS = 15;
 
 using namespace owl;
 using namespace std;
 
   struct PointIntersectionInfo {
-    Point body; // a single body's information
     uint8_t didIntersectNodes[NODES]; // 1d array [bool]
-    Node bhNodes[NODES]; // 1d array [node]
 
     PointIntersectionInfo() {
-      //body = nullptr;
       for(int i = 0; i < NODES; i++) {
         didIntersectNodes[i] = 0;
-        //bhNodes[i] = nullptr;
       }
     }
   };

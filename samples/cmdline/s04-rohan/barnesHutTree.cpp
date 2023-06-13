@@ -149,10 +149,11 @@ float force_on(Point point, Node* node) {
   return totalForce;
 }
 
-void BarnesHutTree::computeForces(Node* node, std::vector<Point> points) {
+void BarnesHutTree::computeForces(Node* node, std::vector<Point> points, std::vector<float>& cpuComputedForces) {
   for(int i = 0; i < points.size(); i++) {
     float force = 0;
     force = force_on(points[i], node);
-    printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, force);
+    cpuComputedForces[i] = force;
+    //printf("Point # %d has x = %f, y = %f, force = %f\n", i, points[i].x, points[i].y, force);
   }
 }

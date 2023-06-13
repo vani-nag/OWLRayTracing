@@ -67,20 +67,19 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   
   
   //Inside circle?
-  //const vec3f org = optixGetWorldRayOrigin();
-  // float x,y,z;
+  const vec3f org = optixGetWorldRayOrigin();
+  float x,y,z;
   
   //Get closest hit triangle's associated circle
-  // x = self.center.x - org.x;
-  // y = self.center.y - org.y;
-  // z = self.center.z - org.z;
+  x = self.center.x - org.x;
+  y = self.center.y - org.y;
+  z = self.center.z - org.z;
 
-  //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
-  //LevelIntersectionInfo levelInfo = prd.out.levelIntersectionData[level];
-  optixLaunchParams.levelIntersectionData[level].pointIntersectionInfo[xID].didIntersectNodes[primID] = 1;
-  //printf("Body x is %f and y is %f \n", body.x, body.y);
-  //printf("Node has x = %f, y = %f, z = %f , mass = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, 0, bhNode.mass);
-  //printf("Ray %d in level %d with s = %f intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, radius, self.center.x, self.center.y, self.center.z, self.mass);
+
+  if(std::sqrt((x*x) + (y*y) + (z*z)) <= radius)
+	{
+    optixLaunchParams.levelIntersectionData[level].pointIntersectionInfo[xID].didIntersectNodes[primID] = 1;
+  }
     
 }
 
