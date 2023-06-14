@@ -75,10 +75,10 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   y = self.center.y - org.y;
   z = self.center.z - org.z;
 
-
+  int *nodesPerLevel = optixLaunchParams.nodesPerLevel;
   if(std::sqrt((x*x) + (y*y) + (z*z)) <= radius)
 	{
-    optixLaunchParams.levelIntersectionData[level].pointIntersectionInfo[xID].didIntersectNodes[primID] = 1;
+    optixLaunchParams.outputIntersectionData[level].pointIntersectionInfo[(xID * nodesPerLevel[level]) + primID] = 1;
   }
     
 }
@@ -94,21 +94,12 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   int yID = optixGetLaunchIndex().y;
 	owl::Ray ray(vec3f(self.points[xID].x,self.points[xID].y,0), vec3f(0,0,1), 0, 1.e-16f);
   PerRayData prd;
-  // prd.pointIdx = xID;
-  // prd.level = yID;
-  // prd.out.levelIntersectionData = optixLaunchParams.levelIntersectionData;
-  //printf("Level is %d, address of pointData is %x\n", z+1, levelIntersectionData[z].pointIntersectionInfo);
-  // body = levelIntersectionData.data()[z].pointIntersectionInfo[1].body;
-  // printf("Level is %d, Body x is %f and y is %f \n", z+1, body.x, body.y);
-  //printf("Level is %d, address of pointData is %x\n", level, self.levelIntersectionData.pointIntersectionInfo);
-  //printf("Level: %d \n", optixLaunchParams.yIDx);
-  //printf("Starting ray for level %d with index: %d\n", yID, xID);
-  //printf("Starting ray in level %d at circle with center x = %f, y = %f \n", yID, self.points[xID].x, self.points[xID].y);
+
   if(optixLaunchParams.parallelLaunch == 0) {
     yID = optixLaunchParams.yIDx;
   }
-  //printf("Starting ray for level %d with index: %d\n", yID, xID);
+
   owl::traceRay(self.worlds[yID], ray, prd);
-  //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
+  
 }
 

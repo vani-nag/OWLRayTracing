@@ -19,32 +19,14 @@
 #include <owl/owl.h>
 #include "barnesHutTree.h"
 #include <vector>
-constexpr int NODES = 4096;
-constexpr int LEVELS = 15;
+
+constexpr int NUM_POINTS = 10000;
 
 using namespace owl;
 using namespace std;
 
-  struct PointIntersectionInfo {
-    uint8_t didIntersectNodes[NODES]; // 1d array [bool]
-
-    PointIntersectionInfo() {
-      for(int i = 0; i < NODES; i++) {
-        didIntersectNodes[i] = 0;
-      }
-    }
-  };
-
   struct LevelIntersectionInfo {
-    int level;
-    PointIntersectionInfo pointIntersectionInfo[LEVELS];
-
-    LevelIntersectionInfo() {
-      level = 0;
-      for(int i = 0; i < LEVELS; i++) {
-        pointIntersectionInfo[i] = PointIntersectionInfo();
-      }
-    }
+    uint8_t *pointIntersectionInfo;
   }; 
 
   struct NodePersistenceInfo {
@@ -85,10 +67,10 @@ using namespace std;
   // ==================================================================
   struct RayGenData
   {
-    uint32_t *fbPtr;
     vec2i  fbSize;
     OptixTraversableHandle *worlds;
     Point *points;
+    int *levelData;
   };
 
   struct PerRayData
@@ -104,6 +86,7 @@ using namespace std;
 	{	
 		int yIDx;
     int parallelLaunch;
-    LevelIntersectionInfo *levelIntersectionData;
+    LevelIntersectionInfo *outputIntersectionData;
+    int *nodesPerLevel;
 	};
 
