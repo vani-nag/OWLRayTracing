@@ -56,7 +56,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 { 
 	const int primID = optixGetPrimitiveIndex();
 	int xID = optixGetLaunchIndex().x;
-  int level = optixGetLaunchIndex().y;
+  int level = optixGetLaunchIndex().y + 1;
   if(optixLaunchParams.parallelLaunch == 0) {
     level = optixLaunchParams.yIDx;
   }
@@ -91,7 +91,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 {
 	const RayGenData &self = owl::getProgramData<RayGenData>();
 	int xID = optixGetLaunchIndex().x;
-  int yID = optixGetLaunchIndex().y;
+  int yID = optixGetLaunchIndex().y + 1;
 	owl::Ray ray(vec3f(self.points[xID].x,self.points[xID].y,0), vec3f(0,0,1), 0, 1.e-16f);
   PerRayData prd;
 

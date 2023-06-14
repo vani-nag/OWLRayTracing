@@ -404,12 +404,15 @@ int main(int ac, char **av) {
   owlBuildPipeline(context);
   owlBuildSBT(context);
 
-  // ##################################################################
-  // Start Ray Tracing Parallel launch
-  // ##################################################################
+  owlParamsSetPointer(lp, "outputIntersectionData", outputIntersectionInfo);
+  owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
+
+  // // ##################################################################
+  // // Start Ray Tracing Parallel launch
+  // // ##################################################################
   // auto start1 = std::chrono::steady_clock::now();
   // owlParamsSet1i(lp, "parallelLaunch", 1);
-  // owlLaunch2D(rayGen, points.size(), worlds.size(), lp);
+  // owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
 
   // auto end1 = std::chrono::steady_clock::now();
   // auto elapsed1 =
@@ -429,8 +432,6 @@ int main(int ac, char **av) {
 
   auto start2 = chrono::steady_clock::now();
   owlParamsSet1i(lp, "parallelLaunch", 0);
-  owlParamsSetPointer(lp, "outputIntersectionData", outputIntersectionInfo);
-  owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
   for(int l = 1; l < worlds.size(); l++) {
     owlParamsSet1i(lp, "yIDx", l);
     owlLaunch2D(rayGen, points.size(), 1, lp);
@@ -458,7 +459,7 @@ int main(int ac, char **av) {
 
   for(int i = 0; i < NUM_POINTS; i++) {
     float percent_error = (abs((computedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-    if(percent_error > 1.0f) {
+    if(percent_error > .5f) {
       LOG_OK("++++++++++++++++++++++++");
       LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
       LOG_OK("++++++++++++++++++++++++");
