@@ -43,10 +43,6 @@ using namespace std;
     }
   };
 
-  // struct IntersectionsGeom {
-  //   LevelIntersectionInfo *levels;
-  // };
-
   // ==================================================================
   /* the raw geometric shape of a sphere, without material - this is
      what goes into intersection and bounds programs */
@@ -60,17 +56,14 @@ using namespace std;
     Sphere *prims;
     float rad;
   };
- 
 
   // ==================================================================
   /* and finally, input for raygen and miss programs */
   // ==================================================================
   struct RayGenData
   {
-    vec2i  fbSize;
     OptixTraversableHandle *worlds;
     Point *points;
-    int *levelData;
   };
 
   struct PerRayData

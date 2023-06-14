@@ -60,7 +60,6 @@ uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
 
 // global variables
 int deviceID;
-vec2f fbSize;
 float gridSize = GRID_SIZE;
 LevelIntersectionInfo *outputIntersectionInfo;
 
@@ -87,8 +86,6 @@ OWLGeomType SpheresGeomType = owlGeomTypeCreate(
 // Create world function
 // ##################################################################
 OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float spheresRadius) {
-  // Init Frame Buffer. Don't need 2D threads, so just use x-dim for threadId
-  fbSize = vec2f(Spheres.size(), 1);
 
   // Create Spheres Buffer
   OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
@@ -264,8 +261,6 @@ int main(int ac, char **av) {
   owlGeomTypeSetBoundsProg(SpheresGeomType, module, "Spheres");
   owlBuildPrograms(context);
 
-  //OWLBuffer frameBuffer = owlHostPinnedBufferCreate(context,OWL_INT,fbSize.x);
-
   OWLVarDecl myGlobalsVars[] = {
     {"yIDx", OWL_INT, OWL_OFFSETOF(MyGlobals, yIDx)},
     {"parallelLaunch", OWL_INT, OWL_OFFSETOF(MyGlobals, parallelLaunch)},
@@ -382,7 +377,6 @@ int main(int ac, char **av) {
   OWLVarDecl rayGenVars[] = {
       //{"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
       {"points", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, points)},
-      {"fbSize", OWL_INT2, OWL_OFFSETOF(RayGenData, fbSize)},
       {"worlds", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, worlds)},
       {/* sentinel to mark end of list */}};
 
@@ -394,7 +388,6 @@ int main(int ac, char **av) {
 
   // ----------- set variables  ----------------------------
   owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
-  owlRayGenSet2i(rayGen, "fbSize", (const owl2i &)fbSize);
   owlRayGenSetBuffer(rayGen, "worlds", WorldsBuffer);
 
   // programs have been built before, but have to rebuild raygen and
