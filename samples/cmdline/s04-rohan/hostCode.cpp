@@ -61,13 +61,17 @@ uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
 // global variables
 int deviceID;
 float gridSize = GRID_SIZE;
-LevelIntersectionInfo *outputIntersectionInfo;
+uint8_t *deviceOutputIntersectionData;
+uint8_t *hostOutputIntersectionData;
+uint8_t *zeroOutputIntersectionData;
+vector<long int> nodesPerLevel;
+long int maxNodesPerLevel = 0;
+std::vector<long int> offsetPerLevel;
 
 // force calculation global variables
 vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
 vector<vector<Node>> bhNodes;
 int totalNumNodes = 0;
-vector<int> nodesPerLevel;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
@@ -140,7 +144,7 @@ float computeObjectsAttractionForce(Point point, Node bhNode) {
   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 }
 
-void computeForces(LevelIntersectionInfo *intersectionsOutputData, vector<Point> points, int levelIdx) {
+void computeForces(uint8_t *intersectionsOutputData, vector<Point> points, int levelIdx) {
   // printf("==========================================\n");
   // for(int i = 1; i < 2; i++) {
   //   printf("++++++++++++++++++++++++++++++++++++++++\n");
@@ -169,7 +173,7 @@ void computeForces(LevelIntersectionInfo *intersectionsOutputData, vector<Point>
             computedForces[i] += computeObjectsAttractionForce(points[i], bhNode);
           }
         }
-        else if(intersectionsOutputData[levelIdx].pointIntersectionInfo[(i * nodesPerLevel[levelIdx]) + k] == 0) { // didn't intersect this node so calculate force
+        else if(intersectionsOutputData[((i * nodesPerLevel[levelIdx]) + k)] == 0) { // didn't intersect this node so calculate force
           computedForces[i] += computeObjectsAttractionForce(points[i], bhNode); // calculate force
 
           // set persistence to don't traverse if node has children
@@ -296,7 +300,15 @@ int main(int ac, char **av) {
       if((node->s != prevS)) {
         if(!InternalSpheres.empty()) {
           worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+          // if(!offsetPerLevel.empty()) {
+          //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
+          // } else {
+          //   offsetPerLevel.push_back(0);
+          // }
           nodesPerLevel.push_back(InternalSpheres.size());
+          if(maxNodesPerLevel < InternalSpheres.size()) {
+            maxNodesPerLevel = InternalSpheres.size();
+          }
           bhNodes.push_back(InternalNodes);
         } else {
           LOG_OK("Spheres r empty!");
@@ -343,9 +355,20 @@ int main(int ac, char **av) {
   // last level gets missed in while loop so this is to account for that
   if(!InternalSpheres.empty()) {
     worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+    // if(!offsetPerLevel.empty()) {
+    //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
+    // } else {
+    //   offsetPerLevel.push_back(0);
+    // }
     nodesPerLevel.push_back(InternalSpheres.size());
+    if(maxNodesPerLevel < InternalSpheres.size()) {
+      maxNodesPerLevel = InternalSpheres.size();
+    }
     bhNodes.push_back(InternalNodes);
   }
+
+  long int numElementsInOutputIntersectionData = (NUM_POINTS * maxNodesPerLevel);
+  printf("Size of outputIntersectionData is = %lu bytes.\n", numElementsInOutputIntersectionData*sizeof(uint8_t));
 
   auto end_b = chrono::steady_clock::now();
   auto elapsed_b = chrono::duration_cast<chrono::microseconds>(end_b - start_b);
@@ -353,16 +376,28 @@ int main(int ac, char **av) {
             << endl;
 
   // create space for output intersection info on device using unified memory
-  OWLBuffer NodesPerLevelBuffer = owlManagedMemoryBufferCreate( 
+  OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
      context, OWL_USER_TYPE(nodesPerLevel[0]), nodesPerLevel.size(), nodesPerLevel.data());
   
-  cudaMallocManaged(&outputIntersectionInfo, worlds.size()*sizeof(LevelIntersectionInfo));
+  // OWLBuffer OffsetPerLevelBuffer = owlManagedMemoryBufferCreate( 
+  //    context, OWL_USER_TYPE(offsetPerLevel[0]), offsetPerLevel.size(), offsetPerLevel.data());
+  
+  hostOutputIntersectionData = new uint8_t[numElementsInOutputIntersectionData]();
+  //zeroOutputIntersectionData = new uint8_t[numElementsInOutputIntersectionData]();
+
+  cudaError_t levelCudaStatus = cudaMalloc(&deviceOutputIntersectionData, numElementsInOutputIntersectionData*sizeof(uint8_t));
+  if(levelCudaStatus != cudaSuccess) printf("cudaMallocManaged failed: %s\n", cudaGetErrorString(levelCudaStatus));
+  levelCudaStatus = cudaMemset(deviceOutputIntersectionData, 0, numElementsInOutputIntersectionData*sizeof(uint8_t));
+  //levelCudaStatus = cudaMemcpy(deviceOutputIntersectionData, zeroOutputIntersectionData, numElementsInOutputIntersectionData*sizeof(uint8_t), cudaMemcpyHostToDevice);
+  if(levelCudaStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(levelCudaStatus));
 
   for(int i = 0; i < worlds.size(); i++) {
-    cudaMallocManaged(&(outputIntersectionInfo[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-    for(int k = 0; k < NUM_POINTS * nodesPerLevel[i]; k++) {
-      outputIntersectionInfo[i].pointIntersectionInfo[k] = 0;
-    }
+    printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
+    //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
+    // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+    // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
+    // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+    // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
   }
 
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
@@ -384,7 +419,7 @@ int main(int ac, char **av) {
   OWLRayGen rayGen = owlRayGenCreate(context, module, "rayGen",
                                      sizeof(RayGenData), rayGenVars, -1);\
   
-                                     
+                           
 
   // ----------- set variables  ----------------------------
   owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
@@ -397,21 +432,22 @@ int main(int ac, char **av) {
   owlBuildPipeline(context);
   owlBuildSBT(context);
 
-  owlParamsSetPointer(lp, "outputIntersectionData", outputIntersectionInfo);
+  owlParamsSetPointer(lp, "outputIntersectionData", deviceOutputIntersectionData);
   owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
+  //owlParamsSetBuffer(lp, "offsetPerLevel", OffsetPerLevelBuffer);
 
   // // ##################################################################
   // // Start Ray Tracing Parallel launch
   // // ##################################################################
-  // auto start1 = std::chrono::steady_clock::now();
-  // owlParamsSet1i(lp, "parallelLaunch", 1);
-  // owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
+  auto start1 = std::chrono::steady_clock::now();
+  owlParamsSet1i(lp, "parallelLaunch", 1);
+  //owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
 
-  // auto end1 = std::chrono::steady_clock::now();
-  // auto elapsed1 =
-  //     std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  // std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
-  //           << " seconds." << std::endl;
+  auto end1 = std::chrono::steady_clock::now();
+  auto elapsed1 =
+      std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+  std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
+            << " seconds." << std::endl;
   
   // ##################################################################
   // Start Ray Tracing Series launch
@@ -430,7 +466,14 @@ int main(int ac, char **av) {
     owlLaunch2D(rayGen, points.size(), 1, lp);
 
     // calculate forces here
-    computeForces(outputIntersectionInfo, points, l);
+    // cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, numElementsInOutputIntersectionData*sizeof(uint8_t), cudaMemcpyDeviceToHost);
+    // if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
+    //computeForces(hostOutputIntersectionData, points, l);
+
+    // set each element in deviceOutputIntersectionData to 0
+    // intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, numElementsInOutputIntersectionData*sizeof(uint8_t));
+    // // intersectionsStatus = cudaMemcpy(deviceOutputIntersectionData, zeroOutputIntersectionData, numElementsInOutputIntersectionData*sizeof(uint8_t), cudaMemcpyHostToDevice);
+    // if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
   }
   auto end2 = chrono::steady_clock::now();
   auto elapsed2 =
@@ -450,18 +493,18 @@ int main(int ac, char **av) {
             << " seconds." << endl;
 
 
-  for(int i = 0; i < NUM_POINTS; i++) {
-    float percent_error = (abs((computedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-    if(percent_error > .5f) {
-      LOG_OK("++++++++++++++++++++++++");
-      LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
-      LOG_OK("++++++++++++++++++++++++");
-      printf("RT force = %f\n", computedForces[i]);
-      printf("CPU force = %f\n", cpuComputedForces[i]);
-      LOG_OK("++++++++++++++++++++++++");
-      printf("\n");
-    }
-  }
+  // for(int i = 0; i < NUM_POINTS; i++) {
+  //   float percent_error = (abs((computedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+  //   if(percent_error > .5f) {
+  //     LOG_OK("++++++++++++++++++++++++");
+  //     LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+  //     LOG_OK("++++++++++++++++++++++++");
+  //     printf("RT force = %f\n", computedForces[i]);
+  //     printf("CPU force = %f\n", cpuComputedForces[i]);
+  //     LOG_OK("++++++++++++++++++++++++");
+  //     printf("\n");
+  //   }
+  // }
 
   //tree->printTree(root, 0, "root");
   //auto cpuforcesstart = chrono::steady_clock::now();
@@ -478,6 +521,11 @@ int main(int ac, char **av) {
   auto elapsed_run_time_end = chrono::duration_cast<chrono::microseconds>(total_run_time_end - total_run_time);
   cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
             << endl;
+  // free memory
+  cudaFree(deviceOutputIntersectionData);
+  delete[] hostOutputIntersectionData;
+
+  // destory owl stuff
   LOG("destroying devicegroup ...");
   owlContextDestroy(context);
 }

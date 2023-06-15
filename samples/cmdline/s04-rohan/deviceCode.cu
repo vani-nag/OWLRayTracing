@@ -75,10 +75,14 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
   y = self.center.y - org.y;
   z = self.center.z - org.z;
 
-  int *nodesPerLevel = optixLaunchParams.nodesPerLevel;
+  long int *nodesPerLevel = optixLaunchParams.nodesPerLevel;
+  //int *offsetPerLevel = optixLaunchParams.offsetPerLevel;
+  //printf("index: %d\n", ((xID * nodesPerLevel[level]) + primID));
   if(std::sqrt((x*x) + (y*y) + (z*z)) <= radius)
 	{
-    optixLaunchParams.outputIntersectionData[level].pointIntersectionInfo[(xID * nodesPerLevel[level]) + primID] = 1;
+    optixLaunchParams.outputIntersectionData[((xID * nodesPerLevel[level]) + primID)] = 1;
+    //printf("Ray %d in level %d intersected circle with center x = %f, y = %f, z = %f , mass = %f\n", xID, level, self.center.x, self.center.y, self.center.z, self.mass);
+    //printf("Ray %d in level %d with %lu nodes intersected primID: %d \n", xID, level, nodesPerLevel[level] , primID);
   }
     
 }
