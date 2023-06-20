@@ -20,14 +20,10 @@
 #include "barnesHutTree.h"
 #include <vector>
 
-constexpr int NUM_POINTS = 100000;
+constexpr int NUM_POINTS = 4;
 
 using namespace owl;
 using namespace std;
-
-  struct LevelIntersectionInfo { // a single level
-    uint8_t *pointIntersectionInfo; // array of intersections for each point
-  }; 
 
   struct NodePersistenceInfo {
     Node bhNode;
@@ -70,16 +66,13 @@ using namespace std;
   {
     int pointIdx;
     int level;
-    struct {
-      LevelIntersectionInfo *levelIntersectionData;
-    } out;
   };
 
 	struct MyGlobals 
 	{	
 		int yIDx;
     int parallelLaunch;
-    uint8_t *outputIntersectionData;
+    char *outputIntersectionData;
     long int *nodesPerLevel;
 	};
 

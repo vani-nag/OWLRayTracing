@@ -39,7 +39,7 @@ embed_ptx(
     deviceCode.cu
 )
 
-add_executable(sample04-rohan hostCode.cpp barnesHutTree.cpp)
+add_executable(sample04-rohan hostCode.cpp barnesHutTree.cpp bitmap.cpp)
 target_link_libraries(sample04-rohan
   PRIVATE
     sample04-rohan-ptx
