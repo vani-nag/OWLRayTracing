@@ -51,6 +51,8 @@
   cout << "#owl.sample(main): " << message << endl;    \
   cout << OWL_TERMINAL_DEFAULT;
 
+#define BYTES_PER_BATCH 6000000000.0 // 6gb
+
 extern "C" char deviceCode_ptx[];
 
 // random init
@@ -62,8 +64,8 @@ uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
 // global variables
 int deviceID;
 float gridSize = GRID_SIZE;
-char *deviceOutputIntersectionData;
-char *hostOutputIntersectionData;
+u_int *deviceOutputIntersectionData;
+u_int *hostOutputIntersectionData;
 vector<long int> nodesPerLevel;
 long int maxNodesPerLevel = 0;
 std::vector<long int> offsetPerLevel;
@@ -72,6 +74,7 @@ std::vector<long int> offsetPerLevel;
 vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
 vector<vector<Node>> bhNodes;
 int totalNumNodes = 0;
+int xOffset = 0;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
@@ -144,7 +147,7 @@ float computeObjectsAttractionForce(Point point, Node bhNode) {
   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 }
 
-void computeForces(char *intersectionsOutputData, vector<Point> points, int levelIdx) {
+void computeForces(u_int *intersectionsOutputData, vector<Point> points, int levelIdx) {
   // printf("==========================================\n");
   // for(int i = 1; i < 2; i++) {
   //   printf("++++++++++++++++++++++++++++++++++++++++\n");
@@ -163,7 +166,7 @@ void computeForces(char *intersectionsOutputData, vector<Point> points, int leve
   vector<NodePersistenceInfo> currentPersistenceInfo;
   for(int i = 0; i < NUM_POINTS; i++) {
     for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
-      //if(i == 1) printf("Point %d, Node COM = (%f, %f), dontTraverse = %d, didIntersect = %d\n", i, bhNodes[levelIdx][k].centerOfMassX, bhNodes[levelIdx][k].centerOfMassY, prevPersistenceInfo[i][k].dontTraverse, intersectionsOutputData[levelIdx].pointIntersectionInfo[(i * nodesPerLevel[levelIdx]) + k]);
+      //printf("Point %d, Node COM = (%f, %f), dontTraverse = %d, didIntersect = %d\n", i, bhNodes[levelIdx][k].centerOfMassX, bhNodes[levelIdx][k].centerOfMassY, prevPersistenceInfo[i][k].dontTraverse, getBitAtPositionInBitmap(intersectionsOutputData, ((i * nodesPerLevel[levelIdx]) + k)));
       //Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
       Node bhNode = bhNodes[levelIdx][k];
       if(prevPersistenceInfo[i][k].dontTraverse != 1) {  // this node's parent intersected
@@ -205,32 +208,6 @@ void computeForces(char *intersectionsOutputData, vector<Point> points, int leve
     copy(currentPersistenceInfo.begin(), currentPersistenceInfo.end(), prevPersistenceInfo[i].begin());
     currentPersistenceInfo.clear();
   }
-}
-
-char atomicTest(char *const address, char const compare, char const val) {
-  char const longAddressModulo = reinterpret_cast< size_t >( address ) & 0x3;
-  u_int *const baseAddress = reinterpret_cast< u_int * >( reinterpret_cast< size_t >( address ) - longAddressModulo ); 
-  u_int constexpr byteSelection[] = {0x3214, 0x3240, 0x3410, 0x4210};
-  u_int const byteSelector = byteSelection[longAddressModulo];
-  u_int const longCompare = compare;
-  u_int const longValue = val;
-  u_int longOldValue = *baseAddress;
-  u_int longAssumed;
-  char oldValue;
-
-  // do {
-  //   u_int const replacement = __byte_perm(longOldValue, longValue, byteSelector);
-  //   u_int const comparsion = __byte_perm(longOldValue, longCompare, byteSelector);
-
-  //   longAssumed = longOldValue;
-    
-  //   longOldValue = ::atomicCAS(baseAddress, comparsion, replacement);
-  //   oldValue = (longOldValue >> (longAddressModulo * 8)) & 0xFF;
-
-  // } while (compare == oldValue and longAssumed != longOldValue);
-
-  return oldValue;
-
 }
 
 int main(int ac, char **av) {
@@ -299,6 +276,7 @@ int main(int ac, char **av) {
 
   OWLVarDecl myGlobalsVars[] = {
     {"yIDx", OWL_INT, OWL_OFFSETOF(MyGlobals, yIDx)},
+    {"xIDxOffset", OWL_INT, OWL_OFFSETOF(MyGlobals, xIDxOffset)},
     {"parallelLaunch", OWL_INT, OWL_OFFSETOF(MyGlobals, parallelLaunch)},
     {"outputIntersectionData", OWL_RAW_POINTER, OWL_OFFSETOF(MyGlobals, outputIntersectionData)},
     {"nodesPerLevel", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, nodesPerLevel)},
@@ -404,56 +382,14 @@ int main(int ac, char **av) {
   cout << "OWL Scenes Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
             << endl;
 
-  // create space for output intersection info on device using unified memory
-  OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
-     context, OWL_USER_TYPE(nodesPerLevel[0]), nodesPerLevel.size(), nodesPerLevel.data());
-  
-  // OWLBuffer OffsetPerLevelBuffer = owlManagedMemoryBufferCreate( 
-  //    context, OWL_USER_TYPE(offsetPerLevel[0]), offsetPerLevel.size(), offsetPerLevel.data());
-
-  unsigned long numElementsInOutputIntersectionData = (NUM_POINTS * maxNodesPerLevel);
-  printf("# of elments in of outputIntersectionData is = %lu.\n", numElementsInOutputIntersectionData);
-
-  size_t bitmapSize = getBitmapSizeGivenNumberOfElements(numElementsInOutputIntersectionData);
-  size_t bitmapSizeInBytes = bitmapSize * sizeof(char);
-  size_t bitmapAlignment = sizeof(int);
-  printf("Size of bitmap is = %lu elements.\n", bitmapSize);
-
-  hostOutputIntersectionData = createBitmap(numElementsInOutputIntersectionData, true);
-
-  //int *randomArray = new int[bitmapSize];
-  
-  cudaError_t levelCudaStatus = cudaMalloc(&deviceOutputIntersectionData, bitmapSizeInBytes);
-  if(levelCudaStatus != cudaSuccess) printf("cudaMallocManaged failed: %s\n", cudaGetErrorString(levelCudaStatus));
-  levelCudaStatus = cudaMemcpy(deviceOutputIntersectionData, hostOutputIntersectionData, bitmapSizeInBytes, cudaMemcpyHostToDevice);
-  if(levelCudaStatus != cudaSuccess) printf("cudaMemcpy H2D failed: %s\n", cudaGetErrorString(levelCudaStatus));
-
-  for(int i = 0; i < bitmapSize; i++) {
-    char const longAddressModulo = reinterpret_cast< size_t >(&hostOutputIntersectionData[i]) & 0x3;
-    u_int *const baseAddress = reinterpret_cast< u_int * >( reinterpret_cast< size_t >(&hostOutputIntersectionData[i]) - longAddressModulo ); 
-    printf("Address of x: is %p with offset: %d with base address: %p\n", &hostOutputIntersectionData[i], longAddressModulo, baseAddress);
-    //std::cout << "Address of x: " << reinterpret_cast<uintptr_t>(&hostOutputIntersectionData[i]) << " with offset: " << longAddressModulo << std::endl;
-  }
-
-  //std::cout << "Address of x: " << reinterpret_cast<uintptr_t>(&hostOutputIntersectionData[]) << std::endl;
-  //char const longAddressModulo = reinterpret_cast< size_t >( address ) & 0x3;
-  // u_int *const baseAddress = reinterpret_cast< u_int * >( reinterpret_cast< size_t >( address ) - longAddressModulo ); 
-  // u_int constexpr byteSelection[] = {0x3214, 0x3240, 0x3410, 0x4210};
-  // u_int const byteSelector = byteSelection[longAddressModulo];
-  // u_int const longCompare = compare;
-  // u_int const longValue = val;
-  // u_int longOldValue = *baseAddress;
-  // u_int longAssumed;
-  // char oldValue;
-
-  for(int i = 0; i < worlds.size(); i++) {
-    printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
-    //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
-    // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-    // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-    // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-    // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-  }
+  // for(int i = 0; i < worlds.size(); i++) {
+  //   printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
+  //   //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
+  //   // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+  //   // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
+  //   // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+  //   // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
+  // }
 
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
@@ -487,54 +423,124 @@ int main(int ac, char **av) {
   owlBuildPipeline(context);
   owlBuildSBT(context);
 
-  owlParamsSetPointer(lp, "outputIntersectionData", deviceOutputIntersectionData);
+  // create space for output intersection info on device using unified memory
+  OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
+     context, OWL_USER_TYPE(nodesPerLevel[0]), nodesPerLevel.size(), nodesPerLevel.data());
+  
   owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
-  //owlParamsSetBuffer(lp, "offsetPerLevel", OffsetPerLevelBuffer);
+
+  unsigned long numElementsInOutputIntersectionData = (NUM_POINTS * maxNodesPerLevel);
+  unsigned long numElementsPerPoint = maxNodesPerLevel;
+  unsigned long numBytesPerPoint = getBitmapSizeGivenNumberOfElements(maxNodesPerLevel) * sizeof(u_int);
+  printf("# of elments in of outputIntersectionData is = %lu.\n", numElementsInOutputIntersectionData);
+  printf("# of bytes per point is = %lu.\n", numBytesPerPoint);
+
+  size_t bitmapSize = getBitmapSizeGivenNumberOfElements(numElementsInOutputIntersectionData);
+  size_t bitmapSizeInBytes = bitmapSize * sizeof(u_int);
+  printf("Size of bitmap is = %lu elements and %f gb.\n", bitmapSize, bitmapSizeInBytes/1000000000.0);
+
+  u_int8_t batches = 0;
+  unsigned long numPointsLeft = NUM_POINTS;
+  unsigned long numPointsPerBatch = ceil(BYTES_PER_BATCH / numBytesPerPoint);
+  size_t batchSizeInBytes = getBitmapSizeGivenNumberOfElements((numPointsPerBatch * maxNodesPerLevel)) * sizeof(u_int);
+
+  if(bitmapSizeInBytes > BYTES_PER_BATCH) {
+    batches = ceil(bitmapSizeInBytes / BYTES_PER_BATCH);
+    printf("Number of batches needed is %d with batch size of %.2f gb.\n", batches, batchSizeInBytes/1000000000.0);
+    //exit(0);
+  }
+
+  std::chrono::microseconds timeForIntersections(0);
+  std::chrono::microseconds timeForSetup(0);
+
+  for(int i = 0; i < batches; i++) {
+    auto startsetupTime = chrono::steady_clock::now();
+    LOG_OK("Batch number: " << i << " has begun.")
+    if(batches == 1) { // no batching required
+      hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
+      batchSizeInBytes = bitmapSizeInBytes;
+      numPointsLeft = 0;
+    } else if(i == batches - 1) { // last batch
+      hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
+      batchSizeInBytes = getBitmapSizeGivenNumberOfElements((numPointsLeft * maxNodesPerLevel)) * sizeof(u_int);
+      numPointsPerBatch = numPointsLeft;
+      numPointsLeft = 0;
+    } else { // create a 6gb long bitmap
+      hostOutputIntersectionData = createBitmap((numPointsPerBatch * maxNodesPerLevel), true);
+      numPointsLeft -= numPointsPerBatch;
+    }
+    printf("Size of bitmap batch is %.2f gb.\n", batchSizeInBytes/1000000000.0);
+
+    cudaError_t levelCudaStatus = cudaMalloc(&deviceOutputIntersectionData, batchSizeInBytes);
+    if(levelCudaStatus != cudaSuccess) printf("cudaMallocManaged failed: %s\n", cudaGetErrorString(levelCudaStatus));
+    levelCudaStatus = cudaMemcpy(deviceOutputIntersectionData, hostOutputIntersectionData, batchSizeInBytes, cudaMemcpyHostToDevice);
+    if(levelCudaStatus != cudaSuccess) printf("cudaMemcpy H2D failed: %s\n", cudaGetErrorString(levelCudaStatus));
+
+    owlParamsSetPointer(lp, "outputIntersectionData", deviceOutputIntersectionData);
+
+    // intersection computation info initialization
+    for(int i = 0; i < NUM_POINTS; i++) {
+      vector<NodePersistenceInfo> prevPersistenceInfoForAPoint(4, NodePersistenceInfo());
+      prevPersistenceInfo.push_back(prevPersistenceInfoForAPoint);
+    }
+
+    auto endsetupTime = chrono::steady_clock::now();
+    auto elapsedsetupTime =
+        chrono::duration_cast<chrono::microseconds>(endsetupTime - startsetupTime);
+    timeForSetup += elapsedsetupTime;
+
+    // ##################################################################
+    // Start Ray Tracing Series launch
+    // ##################################################################
+
+    auto start2 = chrono::steady_clock::now();
+    owlParamsSet1i(lp, "parallelLaunch", 0);
+    for(int l = 1; l < worlds.size(); l++) {
+      owlParamsSet1i(lp, "yIDx", l);
+      owlParamsSet1i(lp, "xIDxOffset", xOffset);
+      //LOG_OK("Level number: " << l << " is being processed.")
+      owlLaunch2D(rayGen, numPointsPerBatch, 1, lp);
+
+      // // calculate forces here
+      // cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, bitmapSizeInBytes, cudaMemcpyDeviceToHost);
+      // if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
+      // computeForces(hostOutputIntersectionData, points, l);
+
+      // // set each element in deviceOutputIntersectionData to 0
+      // intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, bitmapSizeInBytes);
+      // if(intersectionsStatus != cudaSuccess) printf("cudaMemset failed: %s\n", cudaGetErrorString(intersectionsStatus));
+    }
+    auto end2 = chrono::steady_clock::now();
+    auto elapsed2 =
+        chrono::duration_cast<chrono::microseconds>(end2 - start2);
+    timeForIntersections += elapsed2;
+    
+    printf("xOffset is %d.\n", xOffset);
+    xOffset += numPointsPerBatch;
+    // free memory
+    cudaFree(deviceOutputIntersectionData);
+    delete[] hostOutputIntersectionData;
+  }
+
+  cout << "Setup time for intersections: " << timeForSetup.count() / 1000000.0 << " seconds." << endl;
+  cout << "Intersections + calculation time for series launch: " << timeForIntersections.count() / 1000000.0 << " seconds." << endl;
+
+  
+
 
   // // ##################################################################
   // // Start Ray Tracing Parallel launch
   // // ##################################################################
-  auto start1 = std::chrono::steady_clock::now();
-  owlParamsSet1i(lp, "parallelLaunch", 1);
-  //owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
+  // auto start1 = std::chrono::steady_clock::now();
+  // owlParamsSet1i(lp, "parallelLaunch", 1);
+  // //owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
 
-  auto end1 = std::chrono::steady_clock::now();
-  auto elapsed1 =
-      std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
-            << " seconds." << std::endl;
+  // auto end1 = std::chrono::steady_clock::now();
+  // auto elapsed1 =
+  //     std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+  // std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
+  //           << " seconds." << std::endl;
   
-  // ##################################################################
-  // Start Ray Tracing Series launch
-  // ##################################################################
-
-  // intersection computation info initialization
-  for(int i = 0; i < NUM_POINTS; i++) {
-    vector<NodePersistenceInfo> prevPersistenceInfoForAPoint(4, NodePersistenceInfo());
-    prevPersistenceInfo.push_back(prevPersistenceInfoForAPoint);
-  }
-
-  auto start2 = chrono::steady_clock::now();
-  owlParamsSet1i(lp, "parallelLaunch", 0);
-  for(int l = 1; l < worlds.size(); l++) {
-    owlParamsSet1i(lp, "yIDx", l);
-    //LOG_OK("Level number: " << l << " is being processed.")
-    owlLaunch2D(rayGen, points.size(), 1, lp);
-
-    // calculate forces here
-    cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, bitmapSizeInBytes, cudaMemcpyDeviceToHost);
-    if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
-    computeForces(hostOutputIntersectionData, points, l);
-
-    // set each element in deviceOutputIntersectionData to 0
-    intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, bitmapSizeInBytes);
-    if(intersectionsStatus != cudaSuccess) printf("cudaMemset failed: %s\n", cudaGetErrorString(intersectionsStatus));
-  }
-  auto end2 = chrono::steady_clock::now();
-  auto elapsed2 =
-      chrono::duration_cast<chrono::microseconds>(end2 - start2);
-  cout << "Intersections + calculation time for series launch: " << elapsed2.count() / 1000000.0
-            << " seconds." << endl;
 
   // ##################################################################
   // Output Force Computations
@@ -577,8 +583,8 @@ int main(int ac, char **av) {
   cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
             << endl;
   // free memory
-  cudaFree(deviceOutputIntersectionData);
-  delete[] hostOutputIntersectionData;
+  // cudaFree(deviceOutputIntersectionData);
+  // delete[] hostOutputIntersectionData;
 
   // destory owl stuff
   LOG("destroying devicegroup ...");

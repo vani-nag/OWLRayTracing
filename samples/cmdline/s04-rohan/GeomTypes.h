@@ -20,7 +20,7 @@
 #include "barnesHutTree.h"
 #include <vector>
 
-constexpr int NUM_POINTS = 4;
+constexpr int NUM_POINTS = 1000000;
 
 using namespace owl;
 using namespace std;
@@ -71,8 +71,9 @@ using namespace std;
 	struct MyGlobals 
 	{	
 		int yIDx;
+    int xIDxOffset;
     int parallelLaunch;
-    char *outputIntersectionData;
+    u_int *outputIntersectionData;
     long int *nodesPerLevel;
 	};
 
