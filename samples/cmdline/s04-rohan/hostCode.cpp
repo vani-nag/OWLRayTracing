@@ -20,6 +20,7 @@
 // public owl API
 #include <owl/owl.h>
 #include <owl/DeviceMemory.h>
+
 // our device-side data structures
 #include "GeomTypes.h"
 // external helper stuff for image output
@@ -51,7 +52,7 @@
   cout << "#owl.sample(main): " << message << endl;    \
   cout << OWL_TERMINAL_DEFAULT;
 
-#define BYTES_PER_BATCH 6000000000.0 // 6gb
+#define BYTES_PER_BATCH 4000000000.0 // 6gb max
 
 extern "C" char deviceCode_ptx[];
 
@@ -59,7 +60,7 @@ extern "C" char deviceCode_ptx[];
 random_device rd;
 mt19937 gen(rd());
 uniform_real_distribution<float> dis(-5.0f, 5.0f);  // Range for X and Y coordinates
-uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
+uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass 
 
 // global variables
 int deviceID;
@@ -69,6 +70,7 @@ u_int *hostOutputIntersectionData;
 vector<long int> nodesPerLevel;
 long int maxNodesPerLevel = 0;
 std::vector<long int> offsetPerLevel;
+ProfileStatistics *profileStats = new ProfileStatistics();
 
 // force calculation global variables
 vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
@@ -76,6 +78,7 @@ vector<vector<Node>> bhNodes;
 int totalNumNodes = 0;
 int xOffset = 0;
 vector<float> computedForces(NUM_POINTS, 0.0f);
+vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
 OWLContext context = owlContextCreate(nullptr, 1);
@@ -112,6 +115,12 @@ OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float 
   OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
   owlGroupBuildAccel(world);
 
+  size_t final_memory_usage = 0;
+  size_t peak_memory_usage = 0;
+  owlGroupGetAccelSize(world, &final_memory_usage, &peak_memory_usage);
+
+  printf("Final memory usage is %lu, and peak memory usage is %lu\n", final_memory_usage, peak_memory_usage);
+
   //LOG_OK("Built world for grid size: " << gridSize << " and sphere radius : " << spheresRadius);
 
   // return created scene/world
@@ -147,7 +156,7 @@ float computeObjectsAttractionForce(Point point, Node bhNode) {
   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 }
 
-void computeForces(u_int *intersectionsOutputData, vector<Point> points, int levelIdx) {
+void computeForces(u_int *intersectionsOutputData, int numPointsPerBatch, vector<Point> points, int levelIdx) {
   // printf("==========================================\n");
   // for(int i = 1; i < 2; i++) {
   //   printf("++++++++++++++++++++++++++++++++++++++++\n");
@@ -164,7 +173,7 @@ void computeForces(u_int *intersectionsOutputData, vector<Point> points, int lev
   // printf("==========================================\n");
 
   vector<NodePersistenceInfo> currentPersistenceInfo;
-  for(int i = 0; i < NUM_POINTS; i++) {
+  for(int i = 0; i < numPointsPerBatch; i++) {
     for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
       //printf("Point %d, Node COM = (%f, %f), dontTraverse = %d, didIntersect = %d\n", i, bhNodes[levelIdx][k].centerOfMassX, bhNodes[levelIdx][k].centerOfMassY, prevPersistenceInfo[i][k].dontTraverse, getBitAtPositionInBitmap(intersectionsOutputData, ((i * nodesPerLevel[levelIdx]) + k)));
       //Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
@@ -172,12 +181,12 @@ void computeForces(u_int *intersectionsOutputData, vector<Point> points, int lev
       if(prevPersistenceInfo[i][k].dontTraverse != 1) {  // this node's parent intersected
         if(bhNode.isLeaf == true) { // is a leaf node so always calculate force
           //printf("Bhnode mass is %f\n", bhNode.mass);
-          if(bhNode.centerOfMassX != points[i].x && bhNode.centerOfMassY != points[i].y) { // check to make sure not computing force against itself
-            computedForces[i] += computeObjectsAttractionForce(points[i], bhNode);
+          if(bhNode.centerOfMassX != points[i + xOffset].x && bhNode.centerOfMassY != points[i + xOffset].y) { // check to make sure not computing force against itself
+            computedForces[i + xOffset] += computeObjectsAttractionForce(points[i + xOffset], bhNode);
           }
         }
         else if(getBitAtPositionInBitmap(intersectionsOutputData, ((i * nodesPerLevel[levelIdx]) + k)) == 0) { // didn't intersect this node so calculate force
-          computedForces[i] += computeObjectsAttractionForce(points[i], bhNode); // calculate force
+          computedForces[i + xOffset] += computeObjectsAttractionForce(points[i + xOffset], bhNode); // calculate force
 
           // set persistence to don't traverse if node has children
           if(bhNode.nw != nullptr) {
@@ -208,6 +217,7 @@ void computeForces(u_int *intersectionsOutputData, vector<Point> points, int lev
     copy(currentPersistenceInfo.begin(), currentPersistenceInfo.end(), prevPersistenceInfo[i].begin());
     currentPersistenceInfo.clear();
   }
+  printf("prevPersistenceInfo size is %lu\n", prevPersistenceInfo[0].size());
 }
 
 int main(int ac, char **av) {
@@ -254,15 +264,13 @@ int main(int ac, char **av) {
 
 
   LOG("Bulding Tree with # Of Bodies = " << points.size());
-  auto start_tree = chrono::steady_clock::now();
+  auto tree_build_time_start = chrono::steady_clock::now();
   for(const auto& point: points) {
     tree->insertNode(root, point);
   };
 
-  auto end_tree = chrono::steady_clock::now();
-  auto elapsed_tree = chrono::duration_cast<chrono::microseconds>(end_tree - start_tree);
-  cout << "Barnes Hut Tree Build Time: " << elapsed_tree.count() / 1000000.0 << " seconds."
-            << endl;
+  auto tree_build_time_end = chrono::steady_clock::now();
+  profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
 
   //LOG("Size of tree = " << calculateQuadTreeSize(root));
   //tree->printTree(root, 0, "root");
@@ -303,7 +311,8 @@ int main(int ac, char **av) {
   LOG("Bulding OWL Scenes");
   // Enqueue Root and initialize height
   q.push(root);
-  auto start_b = chrono::steady_clock::now();
+  auto scene_build_time_start = chrono::steady_clock::now();
+  float currentForces = 0;
   while (q.empty() == false) {
       // Print front of queue and remove it from queue
       Node* node = q.front();
@@ -377,19 +386,14 @@ int main(int ac, char **av) {
     bhNodes.push_back(InternalNodes);
   }
 
-  auto end_b = chrono::steady_clock::now();
-  auto elapsed_b = chrono::duration_cast<chrono::microseconds>(end_b - start_b);
-  cout << "OWL Scenes Build time: " << elapsed_b.count() / 1000000.0 << " seconds."
-            << endl;
-
-  // for(int i = 0; i < worlds.size(); i++) {
-  //   printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
-  //   //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
-  //   // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-  //   // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-  //   // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-  //   // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-  // }
+  for(int i = 0; i < worlds.size(); i++) {
+    printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
+    //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
+    // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+    // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
+    // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
+    // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
+  }
 
   OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
         context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
@@ -408,9 +412,7 @@ int main(int ac, char **av) {
 
   // ........... create object  ............................
   OWLRayGen rayGen = owlRayGenCreate(context, module, "rayGen",
-                                     sizeof(RayGenData), rayGenVars, -1);\
-  
-                           
+                                     sizeof(RayGenData), rayGenVars, -1);             
 
   // ----------- set variables  ----------------------------
   owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
@@ -422,6 +424,9 @@ int main(int ac, char **av) {
   owlBuildPrograms(context);
   owlBuildPipeline(context);
   owlBuildSBT(context);
+
+  auto scene_build_time_end = chrono::steady_clock::now();
+  profileStats->sceneBuildTime += chrono::duration_cast<chrono::microseconds>(scene_build_time_end - scene_build_time_start);
 
   // create space for output intersection info on device using unified memory
   OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
@@ -439,7 +444,7 @@ int main(int ac, char **av) {
   size_t bitmapSizeInBytes = bitmapSize * sizeof(u_int);
   printf("Size of bitmap is = %lu elements and %f gb.\n", bitmapSize, bitmapSizeInBytes/1000000000.0);
 
-  u_int8_t batches = 0;
+  u_int8_t batches = 1;
   unsigned long numPointsLeft = NUM_POINTS;
   unsigned long numPointsPerBatch = ceil(BYTES_PER_BATCH / numBytesPerPoint);
   size_t batchSizeInBytes = getBitmapSizeGivenNumberOfElements((numPointsPerBatch * maxNodesPerLevel)) * sizeof(u_int);
@@ -450,15 +455,13 @@ int main(int ac, char **av) {
     //exit(0);
   }
 
-  std::chrono::microseconds timeForIntersections(0);
-  std::chrono::microseconds timeForSetup(0);
-
   for(int i = 0; i < batches; i++) {
-    auto startsetupTime = chrono::steady_clock::now();
+    auto intersection_setup_time_start = chrono::steady_clock::now();
     LOG_OK("Batch number: " << i << " has begun.")
     if(batches == 1) { // no batching required
       hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
       batchSizeInBytes = bitmapSizeInBytes;
+      numPointsPerBatch = numPointsLeft;
       numPointsLeft = 0;
     } else if(i == batches - 1) { // last batch
       hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
@@ -484,36 +487,35 @@ int main(int ac, char **av) {
       prevPersistenceInfo.push_back(prevPersistenceInfoForAPoint);
     }
 
-    auto endsetupTime = chrono::steady_clock::now();
-    auto elapsedsetupTime =
-        chrono::duration_cast<chrono::microseconds>(endsetupTime - startsetupTime);
-    timeForSetup += elapsedsetupTime;
-
+    auto intersection_setup_time_end = chrono::steady_clock::now();
+    profileStats->intersectionsSetupTime += chrono::duration_cast<chrono::microseconds>(intersection_setup_time_end - intersection_setup_time_start);
+ 
     // ##################################################################
     // Start Ray Tracing Series launch
     // ##################################################################
 
-    auto start2 = chrono::steady_clock::now();
     owlParamsSet1i(lp, "parallelLaunch", 0);
     for(int l = 1; l < worlds.size(); l++) {
+      auto intersections_start_time = chrono::steady_clock::now();
       owlParamsSet1i(lp, "yIDx", l);
       owlParamsSet1i(lp, "xIDxOffset", xOffset);
       //LOG_OK("Level number: " << l << " is being processed.")
       owlLaunch2D(rayGen, numPointsPerBatch, 1, lp);
+      auto intersections_end_time = chrono::steady_clock::now();
+      profileStats->intersectionsTime += chrono::duration_cast<chrono::microseconds>(intersections_end_time - intersections_start_time);
 
-      // // calculate forces here
-      // cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, bitmapSizeInBytes, cudaMemcpyDeviceToHost);
-      // if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
-      // computeForces(hostOutputIntersectionData, points, l);
+      // calculate forces here
+      auto force_start_time = chrono::steady_clock::now();
+      cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, batchSizeInBytes, cudaMemcpyDeviceToHost);
+      if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
+      //computeForces(hostOutputIntersectionData, numPointsPerBatch, points, l);
 
-      // // set each element in deviceOutputIntersectionData to 0
-      // intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, bitmapSizeInBytes);
-      // if(intersectionsStatus != cudaSuccess) printf("cudaMemset failed: %s\n", cudaGetErrorString(intersectionsStatus));
+      // set each element in deviceOutputIntersectionData to 0
+      intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, batchSizeInBytes);
+      if(intersectionsStatus != cudaSuccess) printf("cudaMemset failed: %s\n", cudaGetErrorString(intersectionsStatus));
+      auto force_end_time = chrono::steady_clock::now();
+      profileStats->forceCalculationTime += chrono::duration_cast<chrono::microseconds>(force_end_time - force_start_time);
     }
-    auto end2 = chrono::steady_clock::now();
-    auto elapsed2 =
-        chrono::duration_cast<chrono::microseconds>(end2 - start2);
-    timeForIntersections += elapsed2;
     
     printf("xOffset is %d.\n", xOffset);
     xOffset += numPointsPerBatch;
@@ -521,12 +523,6 @@ int main(int ac, char **av) {
     cudaFree(deviceOutputIntersectionData);
     delete[] hostOutputIntersectionData;
   }
-
-  cout << "Setup time for intersections: " << timeForSetup.count() / 1000000.0 << " seconds." << endl;
-  cout << "Intersections + calculation time for series launch: " << timeForIntersections.count() / 1000000.0 << " seconds." << endl;
-
-  
-
 
   // // ##################################################################
   // // Start Ray Tracing Parallel launch
@@ -546,12 +542,10 @@ int main(int ac, char **av) {
   // Output Force Computations
   // ##################################################################
   // compute real forces using cpu BH traversal
-  auto cpuforcesstart = chrono::steady_clock::now();
+  auto cpu_forces_start_time = chrono::steady_clock::now();
   tree->computeForces(root, points, cpuComputedForces);
-  auto cpuforcesend = chrono::steady_clock::now();
-  auto cpuforceselapsed = chrono::duration_cast<chrono::microseconds>(cpuforcesend - cpuforcesstart);
-  cout << "Cpu forces calculation time: " << cpuforceselapsed.count() / 1000000.0
-            << " seconds." << endl;
+  auto cpu_forces_end_time = chrono::steady_clock::now();
+  profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
 
 
   // for(int i = 0; i < NUM_POINTS; i++) {
@@ -567,24 +561,26 @@ int main(int ac, char **av) {
   //   }
   // }
 
-  //tree->printTree(root, 0, "root");
-  //auto cpuforcesstart = chrono::steady_clock::now();
-  //auto cpuforcesend = chrono::steady_clock::now();
-  // auto cpuforceselapsed =
-  //     chrono::duration_cast<chrono::microseconds>(cpuforcesend - cpuforcesstart);
-  // cout << "Cpu forces calculation time: " << cpuforceselapsed.count() / 1000000.0
-  //           << " seconds." << endl;
-
   // ##################################################################
   // and finally, clean up
   // ##################################################################
   auto total_run_time_end = chrono::steady_clock::now();
-  auto elapsed_run_time_end = chrono::duration_cast<chrono::microseconds>(total_run_time_end - total_run_time);
-  cout << "Total run time is: " << elapsed_run_time_end.count() / 1000000.0 << " seconds."
-            << endl;
+  profileStats->totalProgramTime += chrono::duration_cast<chrono::microseconds>(total_run_time_end - total_run_time);
+
   // free memory
   // cudaFree(deviceOutputIntersectionData);
   // delete[] hostOutputIntersectionData;
+
+  // Print Statistics
+  printf("--------------------------------------------------------------\n");
+  std::cout << "Tree build time: " << profileStats->treeBuildTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Scene build time: " << profileStats->sceneBuildTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Intersections setup time: " << profileStats->intersectionsSetupTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Intersections time: " << profileStats->intersectionsTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "RT Cores Force Calculations time: " << profileStats->forceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "CPU Force Calculations time: " << profileStats->cpuForceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Total Program time: " << profileStats->totalProgramTime.count() / 1000000.0 << " seconds." << std::endl;
+  printf("--------------------------------------------------------------\n");
 
   // destory owl stuff
   LOG("destroying devicegroup ...");

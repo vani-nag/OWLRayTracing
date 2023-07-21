@@ -131,6 +131,7 @@ OPTIX_INTERSECT_PROGRAM(Spheres)()
 	{
     //printf("Ray %d in level %d with %lu nodes intersected primID: %d \n", xID, level, nodesPerLevel[level] , primID);
     u_int result = deviceSetBitAtPositionInBitmap(optixLaunchParams.outputIntersectionData, ((xID * nodesPerLevel[level]) + primID), 1);
+    prd.intersections += 1;
     //char[0] = 0x11;
     //char[1] = 0x01;
     //char[2] = 0x00;
@@ -172,12 +173,15 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   int yID = optixGetLaunchIndex().y + 1;
 	owl::Ray ray(vec3f(self.points[xID].x,self.points[xID].y,0), vec3f(0,0,1), 0, 1.e-16f);
   PerRayData prd;
+  prd.intersections = 0;
 
   if(optixLaunchParams.parallelLaunch == 0) {
     yID = optixLaunchParams.yIDx;
   }
 
   owl::traceRay(self.worlds[yID], ray, prd);
+
+  //printf("Intersections is %d\n", prd.intersections);
   
 }
 

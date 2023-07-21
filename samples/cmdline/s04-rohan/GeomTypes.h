@@ -19,6 +19,7 @@
 #include <owl/owl.h>
 #include "barnesHutTree.h"
 #include <vector>
+#include <chrono>
 
 constexpr int NUM_POINTS = 1000000;
 
@@ -64,8 +65,7 @@ using namespace std;
 
   struct PerRayData
   {
-    int pointIdx;
-    int level;
+    int intersections;
   };
 
 	struct MyGlobals 
@@ -76,4 +76,18 @@ using namespace std;
     u_int *outputIntersectionData;
     long int *nodesPerLevel;
 	};
+
+  struct ProfileStatistics {
+    chrono::microseconds intersectionsTime;
+    chrono::microseconds sceneBuildTime;
+    chrono::microseconds totalProgramTime;
+    chrono::microseconds treeBuildTime;
+    chrono::microseconds forceCalculationTime;
+    chrono::microseconds cpuForceCalculationTime;
+    chrono::microseconds intersectionsSetupTime;
+
+    ProfileStatistics() : intersectionsTime(0), sceneBuildTime(0), totalProgramTime(0), treeBuildTime(0), forceCalculationTime(0), cpuForceCalculationTime(0), 
+    intersectionsSetupTime(0) {}
+
+  };
 
