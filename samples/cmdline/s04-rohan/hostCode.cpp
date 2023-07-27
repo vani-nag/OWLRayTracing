@@ -65,18 +65,13 @@ uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass
 // global variables
 int deviceID;
 float gridSize = GRID_SIZE;
-u_int *deviceOutputIntersectionData;
-u_int *hostOutputIntersectionData;
 vector<long int> nodesPerLevel;
 long int maxNodesPerLevel = 0;
-std::vector<long int> offsetPerLevel;
 ProfileStatistics *profileStats = new ProfileStatistics();
 
 // force calculation global variables
-vector<vector<NodePersistenceInfo>> prevPersistenceInfo;
 vector<vector<Node>> bhNodes;
 int totalNumNodes = 0;
-int xOffset = 0;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
@@ -84,141 +79,70 @@ vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
-OWLVarDecl SpheresGeomVars[] = {
-    {"prims", OWL_BUFPTR, OWL_OFFSETOF(SpheresGeom, prims)},
-    {"rad", OWL_FLOAT, OWL_OFFSETOF(SpheresGeom, rad)},
-    {/* sentinel to mark end of list */}};
+// const int NUM_VERTICES = 6;
+// vec3f vertices[NUM_VERTICES] =
+//   {
+//     { +1.f, 0.0f,-0.5f },
+//     { +1.f,-0.5f,0.5f },
+//     { +1.f,+0.5f,+0.5f },
+//     { +2.f, 0.0f,-0.5f },
+//     { +2.f,-0.5f,0.5f },
+//     { +2.f,+0.5f,+0.5f }
+//   };
 
-OWLGeomType SpheresGeomType = owlGeomTypeCreate(
-    context, OWL_GEOMETRY_USER, sizeof(SpheresGeom), SpheresGeomVars, -1);
+// const int NUM_INDICES = 2;
+// vec3i indices[NUM_INDICES] =
+//   {
+//     { 0,1,2 },
+//     { 3,4,5 }
+//   };
 
-// ##################################################################
-// Create world function
-// ##################################################################
-OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float spheresRadius) {
+// // ##################################################################
+// // Create world function
+// // ##################################################################
+// OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float spheresRadius) {
 
-  // Create Spheres Buffer
-  OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
-      context, OWL_USER_TYPE(Spheres[0]), Spheres.size(), Spheres.data());
+//   // Create Spheres Buffer
+//   OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
+//       context, OWL_USER_TYPE(Spheres[0]), Spheres.size(), Spheres.data());
 
-  OWLGeom SpheresGeometry = owlGeomCreate(context, SpheresGeomType);
-  owlGeomSetPrimCount(SpheresGeometry, Spheres.size());
-  owlGeomSetBuffer(SpheresGeometry, "prims", SpheresBuffer);
-  owlGeomSet1f(SpheresGeometry, "rad", spheresRadius);
+//   OWLGeom SpheresGeometry = owlGeomCreate(context, SpheresGeomType);
+//   owlGeomSetPrimCount(SpheresGeometry, Spheres.size());
+//   owlGeomSetBuffer(SpheresGeometry, "prims", SpheresBuffer);
+//   owlGeomSet1f(SpheresGeometry, "rad", spheresRadius);
 
-  // Setup accel group
-  OWLGeom userGeoms[] = {SpheresGeometry};
+//   // Setup accel group
+//   OWLGeom userGeoms[] = {SpheresGeometry};
 
-  OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
-  owlGroupBuildAccel(spheresGroup);
+//   OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
+//   owlGroupBuildAccel(spheresGroup);
 
-  OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
-  owlGroupBuildAccel(world);
+//   OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
+//   owlGroupBuildAccel(world);
 
-  size_t final_memory_usage = 0;
-  size_t peak_memory_usage = 0;
-  owlGroupGetAccelSize(world, &final_memory_usage, &peak_memory_usage);
+//   size_t final_memory_usage = 0;
+//   size_t peak_memory_usage = 0;
+//   owlGroupGetAccelSize(world, &final_memory_usage, &peak_memory_usage);
 
-  printf("Final memory usage is %lu, and peak memory usage is %lu\n", final_memory_usage, peak_memory_usage);
+//   printf("Final memory usage is %lu, and peak memory usage is %lu\n", final_memory_usage, peak_memory_usage);
 
-  //LOG_OK("Built world for grid size: " << gridSize << " and sphere radius : " << spheresRadius);
+//   //LOG_OK("Built world for grid size: " << gridSize << " and sphere radius : " << spheresRadius);
 
-  // return created scene/world
-  return owlGroupGetTraversable(world, deviceID);
-}
+//   // return created scene/world
+//   return owlGroupGetTraversable(world, deviceID);
+// }
 
-size_t calculateQuadTreeSize(Node* node) {
-    if (node == nullptr) {
-        return 0;  // Base case: empty node
-    }
+// float computeObjectsAttractionForce(Point point, Node bhNode) {
+//   float mass_one = point.mass;
+//   float mass_two = bhNode.mass;
 
-    size_t currentNodeSize = sizeof(Node);
+//   // distance calculation
+//   float dx = point.x - bhNode.centerOfMassX;
+//   float dy = point.y - bhNode.centerOfMassY;
+//   float r_2 = (dx * dx) + (dy * dy);
 
-    // Recursively calculate the size of each child subtree
-    size_t size = currentNodeSize;  // Count the current node itself
-    size += calculateQuadTreeSize(node->nw);
-    size += calculateQuadTreeSize(node->ne);
-    size += calculateQuadTreeSize(node->sw);
-    size += calculateQuadTreeSize(node->se);
-
-    return size;
-}
-
-float computeObjectsAttractionForce(Point point, Node bhNode) {
-  float mass_one = point.mass;
-  float mass_two = bhNode.mass;
-
-  // distance calculation
-  float dx = point.x - bhNode.centerOfMassX;
-  float dy = point.y - bhNode.centerOfMassY;
-  float r_2 = (dx * dx) + (dy * dy);
-
-  return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
-}
-
-void computeForces(u_int *intersectionsOutputData, int numPointsPerBatch, vector<Point> points, int levelIdx) {
-  // printf("==========================================\n");
-  // for(int i = 1; i < 2; i++) {
-  //   printf("++++++++++++++++++++++++++++++++++++++++\n");
-  //   printf("Point # %d with x = %f, y = %f, mass = %f\n", i, points[i].x, points[i].y, points[i].mass);
-  //   for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
-  //     if(intersectionsOutputData[levelIdx].pointIntersectionInfo[i].didIntersectNodes[k] != 0) {
-  //       // Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
-  //          Node bhNode = bhNodes[levelIdx][k];
-  //       float radius = (GRID_SIZE / pow(2, levelIdx)) / THRESHOLD;
-  //       printf("Intersected bhNode with x = %f, y = %f, mass = %f, radius = %f\n", bhNode.centerOfMassX, bhNode.centerOfMassY, bhNode.mass, radius);
-  //     }
-  //   }
-  // }
-  // printf("==========================================\n");
-
-  vector<NodePersistenceInfo> currentPersistenceInfo;
-  for(int i = 0; i < numPointsPerBatch; i++) {
-    for(int k = 0; k < nodesPerLevel[levelIdx]; k++) {
-      //printf("Point %d, Node COM = (%f, %f), dontTraverse = %d, didIntersect = %d\n", i, bhNodes[levelIdx][k].centerOfMassX, bhNodes[levelIdx][k].centerOfMassY, prevPersistenceInfo[i][k].dontTraverse, getBitAtPositionInBitmap(intersectionsOutputData, ((i * nodesPerLevel[levelIdx]) + k)));
-      //Node bhNode = intersectionsOutputData[levelIdx].pointIntersectionInfo[i].bhNodes[k];
-      Node bhNode = bhNodes[levelIdx][k];
-      if(prevPersistenceInfo[i][k].dontTraverse != 1) {  // this node's parent intersected
-        if(bhNode.isLeaf == true) { // is a leaf node so always calculate force
-          //printf("Bhnode mass is %f\n", bhNode.mass);
-          if(bhNode.centerOfMassX != points[i + xOffset].x && bhNode.centerOfMassY != points[i + xOffset].y) { // check to make sure not computing force against itself
-            computedForces[i + xOffset] += computeObjectsAttractionForce(points[i + xOffset], bhNode);
-          }
-        }
-        else if(getBitAtPositionInBitmap(intersectionsOutputData, ((i * nodesPerLevel[levelIdx]) + k)) == 0) { // didn't intersect this node so calculate force
-          computedForces[i + xOffset] += computeObjectsAttractionForce(points[i + xOffset], bhNode); // calculate force
-
-          // set persistence to don't traverse if node has children
-          if(bhNode.nw != nullptr) {
-            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
-            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
-            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
-            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
-          }
-        } else { // did intersect this node so don't calculate force
-          if(bhNode.nw != nullptr) { // this node has children so set this persistence to true
-            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 0));
-            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 0));
-            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 0));
-            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 0));
-          }
-        }
-      } else { // parent already intersected so all children should not be computed
-        if(bhNode.nw != nullptr) {
-            if(bhNode.nw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.nw), 1));
-            if(bhNode.ne->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.ne), 1));
-            if(bhNode.sw->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.sw), 1));
-            if(bhNode.se->mass != 0) currentPersistenceInfo.push_back(NodePersistenceInfo(*(bhNode.se), 1));
-        }
-      }
-    }
-    prevPersistenceInfo[i].clear();
-    prevPersistenceInfo[i].resize(currentPersistenceInfo.size());
-    copy(currentPersistenceInfo.begin(), currentPersistenceInfo.end(), prevPersistenceInfo[i].begin());
-    currentPersistenceInfo.clear();
-  }
-  printf("prevPersistenceInfo size is %lu\n", prevPersistenceInfo[0].size());
-}
+//   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
+// }
 
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
@@ -237,26 +161,38 @@ int main(int ac, char **av) {
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
 
+  vector<vec3f> vertices;
+  vector<vec3i> indices;
   vector<Point> points;
-  // Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
-  // Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
-  // Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
-  // Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
-  // Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
-  // points.push_back(p0);
-  // points.push_back(p1);
-  // points.push_back(p2);
-  // points.push_back(p3);
-  // points.push_back(p4);
+  Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
+  Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
+  Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
+  Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
+  Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
+  points.push_back(p0);
+  points.push_back(p1);
+  points.push_back(p2);
+  points.push_back(p3);
+  points.push_back(p4);
 
-  for (int i = 0; i < NUM_POINTS; ++i) {
-    Point p;
-    p.x = dis(gen);
-    p.y = dis(gen);
-    p.mass = disMass(gen);
-    p.idX = i;
-    points.push_back(p);
-    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  // for (int i = 0; i < NUM_POINTS; ++i) {
+  //   Point p;
+  //   p.x = dis(gen);
+  //   p.y = dis(gen);
+  //   p.mass = disMass(gen);
+  //   p.idX = i;
+  //   points.push_back(p);
+  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  // }
+
+  for(int i = 1; i < points.size() + 1; i++) {
+    vertices.push_back(vec3f{static_cast<float>(i), 0.0f, -0.5f});
+    vertices.push_back(vec3f{static_cast<float>(i), -0.5f, 0.5f});
+    vertices.push_back(vec3f{static_cast<float>(i), 0.5f, 0.5f});
+  }
+
+  for(int i = 0; i < vertices.size(); i+=3) {
+    indices.push_back(vec3i{i, i+1, i+2});
   }
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
@@ -272,21 +208,66 @@ int main(int ac, char **av) {
   auto tree_build_time_end = chrono::steady_clock::now();
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
 
-  //LOG("Size of tree = " << calculateQuadTreeSize(root));
-  //tree->printTree(root, 0, "root");
+  tree->printTree(root, 0, "root");
 
   // Get the device ID
   cudaGetDevice(&deviceID);
   LOG_OK("Device ID: " << deviceID);
-  owlGeomTypeSetIntersectProg(SpheresGeomType, 0, module, "Spheres");
-  owlGeomTypeSetBoundsProg(SpheresGeomType, module, "Spheres");
-  owlBuildPrograms(context);
+  OWLVarDecl trianglesGeomVars[] = {
+    { "index",  OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,index)},
+    { "vertex", OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,vertex)},
+    { /* sentinel to mark end of list */ }
+  };
+
+  OWLGeomType trianglesGeomType
+    = owlGeomTypeCreate(context,
+                        OWL_TRIANGLES,
+                        sizeof(TrianglesGeomData),
+                        trianglesGeomVars,-1);
+
+  owlGeomTypeSetClosestHit(trianglesGeomType,0,
+                           module,"TriangleMesh");
+  
+  OWLBuffer vertexBuffer
+    = owlDeviceBufferCreate(context, OWL_USER_TYPE(vertices[0]), vertices.size(), vertices.data());
+  OWLBuffer indexBuffer
+    = owlDeviceBufferCreate(context, OWL_USER_TYPE(indices[0]), indices.size(), indices.data());
+  
+  OWLGeom trianglesGeom
+    = owlGeomCreate(context,trianglesGeomType);
+  
+  owlTrianglesSetVertices(trianglesGeom,vertexBuffer,vertices.size(),sizeof(vec3f),0);
+  owlTrianglesSetIndices(trianglesGeom,indexBuffer,indices.size(),sizeof(vec3i),0);
+  
+  owlGeomSetBuffer(trianglesGeom,"vertex",vertexBuffer);
+  owlGeomSetBuffer(trianglesGeom,"index",indexBuffer);
+
+  OWLGroup trianglesGroup
+    = owlTrianglesGeomGroupCreate(context,1,&trianglesGeom);
+  owlGroupBuildAccel(trianglesGroup);
+  OWLGroup world
+    = owlInstanceGroupCreate(context,1,&trianglesGroup);
+  owlGroupBuildAccel(world);
+
+  // -------------------------------------------------------
+  // set up miss prog
+  // -------------------------------------------------------
+  OWLVarDecl missProgVars[]
+    = {
+    { "color0", OWL_FLOAT3, OWL_OFFSETOF(MissProgData,color0)},
+    { "color1", OWL_FLOAT3, OWL_OFFSETOF(MissProgData,color1)},
+    { /* sentinel to mark end of list */ }
+  };
+  // ----------- create object  ----------------------------
+  OWLMissProg missProg
+    = owlMissProgCreate(context,module,"miss",sizeof(MissProgData),
+                        missProgVars,-1);
+
+  // ----------- set variables  ----------------------------
+  owlMissProgSet3f(missProg,"color0",owl3f{.8f,0.f,0.f});
+  owlMissProgSet3f(missProg,"color1",owl3f{.8f,.8f,.8f});
 
   OWLVarDecl myGlobalsVars[] = {
-    {"yIDx", OWL_INT, OWL_OFFSETOF(MyGlobals, yIDx)},
-    {"xIDxOffset", OWL_INT, OWL_OFFSETOF(MyGlobals, xIDxOffset)},
-    {"parallelLaunch", OWL_INT, OWL_OFFSETOF(MyGlobals, parallelLaunch)},
-    {"outputIntersectionData", OWL_RAW_POINTER, OWL_OFFSETOF(MyGlobals, outputIntersectionData)},
     {"nodesPerLevel", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, nodesPerLevel)},
     {/* sentinel to mark end of list */}};
 
@@ -296,118 +277,98 @@ int main(int ac, char **av) {
   // Level order traversal of Barnes Hut Tree to build worlds
   // ##################################################################
 
-  //vector<LevelIntersectionInfo> levelIntersectionData;
-  vector<OptixTraversableHandle> worlds;
-  vector<Sphere> InternalSpheres;
-  vector<Node> InternalNodes;
-  //LevelIntersectionInfo levelInfo;
-  float prevS = gridSize;
-  int level = 0;
+  // vector<Node> InternalNodes;
+  // float prevS = gridSize;
+  // int level = 0;
 
-  // level order traversal of BarnesHutTree
-  // Create an empty queue for level order traversal
-  queue<Node*> q;
+  // // level order traversal of BarnesHutTree
+  // // Create an empty queue for level order traversal
+  // queue<Node*> q;
   
-  LOG("Bulding OWL Scenes");
-  // Enqueue Root and initialize height
-  q.push(root);
+  // LOG("Bulding OWL Scenes");
+  // // Enqueue Root and initialize height
+  // q.push(root);
   auto scene_build_time_start = chrono::steady_clock::now();
-  float currentForces = 0;
-  while (q.empty() == false) {
-      // Print front of queue and remove it from queue
-      Node* node = q.front();
-      if((node->s != prevS)) {
-        if(!InternalSpheres.empty()) {
-          worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
-          // if(!offsetPerLevel.empty()) {
-          //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
-          // } else {
-          //   offsetPerLevel.push_back(0);
-          // }
-          nodesPerLevel.push_back(InternalSpheres.size());
-          if(maxNodesPerLevel < InternalSpheres.size()) {
-            maxNodesPerLevel = InternalSpheres.size();
-          }
-          bhNodes.push_back(InternalNodes);
-        } else {
-          LOG_OK("Spheres r empty!");
-        }
-        InternalSpheres.clear();
-        InternalNodes.clear();
-        prevS = node->s;
-        gridSize = node->s;
-        level += 1;
-      } else {
-        //LOG_OK("HITS THIS!");
-      }
-      if(node->s == gridSize) {
-        if(node->mass != 0.0f) {
-          if(node->ne == nullptr) {
-            node->isLeaf = true;
-          } else {
-            node->isLeaf = false;
-          }
-          InternalNodes.push_back((*node));
-          totalNumNodes += 1;
-          InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass});
-        }
-      }
-      q.pop();
+  // float currentForces = 0;
+  // while (q.empty() == false) {
+  //     // Print front of queue and remove it from queue
+  //     Node* node = q.front();
+  //     if((node->s != prevS)) {
+  //       if(!InternalSpheres.empty()) {
+  //         worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+  //         // if(!offsetPerLevel.empty()) {
+  //         //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
+  //         // } else {
+  //         //   offsetPerLevel.push_back(0);
+  //         // }
+  //         nodesPerLevel.push_back(InternalSpheres.size());
+  //         if(maxNodesPerLevel < InternalSpheres.size()) {
+  //           maxNodesPerLevel = InternalSpheres.size();
+  //         }
+  //         bhNodes.push_back(InternalNodes);
+  //       } else {
+  //         LOG_OK("Spheres r empty!");
+  //       }
+  //       InternalSpheres.clear();
+  //       InternalNodes.clear();
+  //       prevS = node->s;
+  //       gridSize = node->s;
+  //       level += 1;
+  //     } else {
+  //       //LOG_OK("HITS THIS!");
+  //     }
+  //     if(node->s == gridSize) {
+  //       if(node->mass != 0.0f) {
+  //         if(node->ne == nullptr) {
+  //           node->isLeaf = true;
+  //         } else {
+  //           node->isLeaf = false;
+  //         }
+  //         InternalNodes.push_back((*node));
+  //         totalNumNodes += 1;
+  //         InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass});
+  //       }
+  //     }
+  //     q.pop();
 
-      /* Enqueue left child */
-      if (node->nw != NULL)
-          q.push(node->nw);
+  //     /* Enqueue left child */
+  //     if (node->nw != NULL)
+  //         q.push(node->nw);
 
-      /*Enqueue right child */
-      if (node->ne != NULL)
-          q.push(node->ne);
+  //     /*Enqueue right child */
+  //     if (node->ne != NULL)
+  //         q.push(node->ne);
       
-      /* Enqueue left child */
-      if (node->sw != NULL)
-          q.push(node->sw);
+  //     /* Enqueue left child */
+  //     if (node->sw != NULL)
+  //         q.push(node->sw);
 
-      /*Enqueue right child */
-      if (node->se != NULL)
-          q.push(node->se);
-  }
+  //     /*Enqueue right child */
+  //     if (node->se != NULL)
+  //         q.push(node->se);
+  // }
 
-  // last level gets missed in while loop so this is to account for that
-  if(!InternalSpheres.empty()) {
-    worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
-    // if(!offsetPerLevel.empty()) {
-    //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
-    // } else {
-    //   offsetPerLevel.push_back(0);
-    // }
-    nodesPerLevel.push_back(InternalSpheres.size());
-    if(maxNodesPerLevel < InternalSpheres.size()) {
-      maxNodesPerLevel = InternalSpheres.size();
-    }
-    bhNodes.push_back(InternalNodes);
-  }
-
-  for(int i = 0; i < worlds.size(); i++) {
-    printf("For level %d there are %lu nodes\n", i, nodesPerLevel[i]);
-    //printf("For level %d the offset is %lu.\n", i, offsetPerLevel[i]);
-    // cudaError_t pointCudaStatus = cudaMalloc(&(deviceOutputIntersectionData[i].pointIntersectionInfo), (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-    // if(pointCudaStatus != cudaSuccess) printf("cudaMallocManaged failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-    // pointCudaStatus = cudaMemset(deviceOutputIntersectionData[i].pointIntersectionInfo, 0, (NUM_POINTS * nodesPerLevel[i]) * sizeof(uint8_t));
-    // if(pointCudaStatus != cudaSuccess) printf("cudaMemset failed at level %d: %s\n", i, cudaGetErrorString(pointCudaStatus));
-  }
-
-  OWLBuffer WorldsBuffer = owlDeviceBufferCreate(
-        context, OWL_USER_TYPE(worlds[0]), worlds.size(), worlds.data());
-  
-  LOG_OK("Number of Worlds: " << worlds.size());
-  LOG_OK("Total number of non-empty BH Nodes: " << totalNumNodes);
+  // // last level gets missed in while loop so this is to account for that
+  // if(!InternalSpheres.empty()) {
+  //   worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
+  //   // if(!offsetPerLevel.empty()) {
+  //   //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
+  //   // } else {
+  //   //   offsetPerLevel.push_back(0);
+  //   // }
+  //   nodesPerLevel.push_back(InternalSpheres.size());
+  //   if(maxNodesPerLevel < InternalSpheres.size()) {
+  //     maxNodesPerLevel = InternalSpheres.size();
+  //   }
+  //   bhNodes.push_back(InternalNodes);
+  // }
   
   // -------------------------------------------------------
   // set up ray gen program
   // -------------------------------------------------------
   OWLVarDecl rayGenVars[] = {
       //{"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
-      {"points", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, points)},
-      {"worlds", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, worlds)},
+      {"world", OWL_GROUP, OWL_OFFSETOF(RayGenData, world)},
       {/* sentinel to mark end of list */}};
 
   // ........... create object  ............................
@@ -415,8 +376,7 @@ int main(int ac, char **av) {
                                      sizeof(RayGenData), rayGenVars, -1);             
 
   // ----------- set variables  ----------------------------
-  owlRayGenSetBuffer(rayGen, "points", PointsBuffer);
-  owlRayGenSetBuffer(rayGen, "worlds", WorldsBuffer);
+  owlRayGenSetGroup(rayGen, "world", world);
 
   // programs have been built before, but have to rebuild raygen and
   // miss progs
@@ -428,114 +388,18 @@ int main(int ac, char **av) {
   auto scene_build_time_end = chrono::steady_clock::now();
   profileStats->sceneBuildTime += chrono::duration_cast<chrono::microseconds>(scene_build_time_end - scene_build_time_start);
 
-  // create space for output intersection info on device using unified memory
-  OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
-     context, OWL_USER_TYPE(nodesPerLevel[0]), nodesPerLevel.size(), nodesPerLevel.data());
-  
-  owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
 
-  unsigned long numElementsInOutputIntersectionData = (NUM_POINTS * maxNodesPerLevel);
-  unsigned long numElementsPerPoint = maxNodesPerLevel;
-  unsigned long numBytesPerPoint = getBitmapSizeGivenNumberOfElements(maxNodesPerLevel) * sizeof(u_int);
-  printf("# of elments in of outputIntersectionData is = %lu.\n", numElementsInOutputIntersectionData);
-  printf("# of bytes per point is = %lu.\n", numBytesPerPoint);
+  // ##################################################################
+  // Start Ray Tracing Parallel launch
+  // ##################################################################
+  auto start1 = std::chrono::steady_clock::now();
+  owlLaunch2D(rayGen, 1, 1, lp);
 
-  size_t bitmapSize = getBitmapSizeGivenNumberOfElements(numElementsInOutputIntersectionData);
-  size_t bitmapSizeInBytes = bitmapSize * sizeof(u_int);
-  printf("Size of bitmap is = %lu elements and %f gb.\n", bitmapSize, bitmapSizeInBytes/1000000000.0);
-
-  u_int8_t batches = 1;
-  unsigned long numPointsLeft = NUM_POINTS;
-  unsigned long numPointsPerBatch = ceil(BYTES_PER_BATCH / numBytesPerPoint);
-  size_t batchSizeInBytes = getBitmapSizeGivenNumberOfElements((numPointsPerBatch * maxNodesPerLevel)) * sizeof(u_int);
-
-  if(bitmapSizeInBytes > BYTES_PER_BATCH) {
-    batches = ceil(bitmapSizeInBytes / BYTES_PER_BATCH);
-    printf("Number of batches needed is %d with batch size of %.2f gb.\n", batches, batchSizeInBytes/1000000000.0);
-    //exit(0);
-  }
-
-  for(int i = 0; i < batches; i++) {
-    auto intersection_setup_time_start = chrono::steady_clock::now();
-    LOG_OK("Batch number: " << i << " has begun.")
-    if(batches == 1) { // no batching required
-      hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
-      batchSizeInBytes = bitmapSizeInBytes;
-      numPointsPerBatch = numPointsLeft;
-      numPointsLeft = 0;
-    } else if(i == batches - 1) { // last batch
-      hostOutputIntersectionData = createBitmap((numPointsLeft * maxNodesPerLevel), true);
-      batchSizeInBytes = getBitmapSizeGivenNumberOfElements((numPointsLeft * maxNodesPerLevel)) * sizeof(u_int);
-      numPointsPerBatch = numPointsLeft;
-      numPointsLeft = 0;
-    } else { // create a 6gb long bitmap
-      hostOutputIntersectionData = createBitmap((numPointsPerBatch * maxNodesPerLevel), true);
-      numPointsLeft -= numPointsPerBatch;
-    }
-    printf("Size of bitmap batch is %.2f gb.\n", batchSizeInBytes/1000000000.0);
-
-    cudaError_t levelCudaStatus = cudaMalloc(&deviceOutputIntersectionData, batchSizeInBytes);
-    if(levelCudaStatus != cudaSuccess) printf("cudaMallocManaged failed: %s\n", cudaGetErrorString(levelCudaStatus));
-    levelCudaStatus = cudaMemcpy(deviceOutputIntersectionData, hostOutputIntersectionData, batchSizeInBytes, cudaMemcpyHostToDevice);
-    if(levelCudaStatus != cudaSuccess) printf("cudaMemcpy H2D failed: %s\n", cudaGetErrorString(levelCudaStatus));
-
-    owlParamsSetPointer(lp, "outputIntersectionData", deviceOutputIntersectionData);
-
-    // intersection computation info initialization
-    for(int i = 0; i < NUM_POINTS; i++) {
-      vector<NodePersistenceInfo> prevPersistenceInfoForAPoint(4, NodePersistenceInfo());
-      prevPersistenceInfo.push_back(prevPersistenceInfoForAPoint);
-    }
-
-    auto intersection_setup_time_end = chrono::steady_clock::now();
-    profileStats->intersectionsSetupTime += chrono::duration_cast<chrono::microseconds>(intersection_setup_time_end - intersection_setup_time_start);
- 
-    // ##################################################################
-    // Start Ray Tracing Series launch
-    // ##################################################################
-
-    owlParamsSet1i(lp, "parallelLaunch", 0);
-    for(int l = 1; l < worlds.size(); l++) {
-      auto intersections_start_time = chrono::steady_clock::now();
-      owlParamsSet1i(lp, "yIDx", l);
-      owlParamsSet1i(lp, "xIDxOffset", xOffset);
-      //LOG_OK("Level number: " << l << " is being processed.")
-      owlLaunch2D(rayGen, numPointsPerBatch, 1, lp);
-      auto intersections_end_time = chrono::steady_clock::now();
-      profileStats->intersectionsTime += chrono::duration_cast<chrono::microseconds>(intersections_end_time - intersections_start_time);
-
-      // calculate forces here
-      auto force_start_time = chrono::steady_clock::now();
-      cudaError_t intersectionsStatus = cudaMemcpy(hostOutputIntersectionData, deviceOutputIntersectionData, batchSizeInBytes, cudaMemcpyDeviceToHost);
-      if(intersectionsStatus != cudaSuccess) printf("cudaMemcpy failed: %s\n", cudaGetErrorString(intersectionsStatus));
-      //computeForces(hostOutputIntersectionData, numPointsPerBatch, points, l);
-
-      // set each element in deviceOutputIntersectionData to 0
-      intersectionsStatus = cudaMemset(deviceOutputIntersectionData, 0, batchSizeInBytes);
-      if(intersectionsStatus != cudaSuccess) printf("cudaMemset failed: %s\n", cudaGetErrorString(intersectionsStatus));
-      auto force_end_time = chrono::steady_clock::now();
-      profileStats->forceCalculationTime += chrono::duration_cast<chrono::microseconds>(force_end_time - force_start_time);
-    }
-    
-    printf("xOffset is %d.\n", xOffset);
-    xOffset += numPointsPerBatch;
-    // free memory
-    cudaFree(deviceOutputIntersectionData);
-    delete[] hostOutputIntersectionData;
-  }
-
-  // // ##################################################################
-  // // Start Ray Tracing Parallel launch
-  // // ##################################################################
-  // auto start1 = std::chrono::steady_clock::now();
-  // owlParamsSet1i(lp, "parallelLaunch", 1);
-  // //owlLaunch2D(rayGen, points.size(), worlds.size() - 1, lp);
-
-  // auto end1 = std::chrono::steady_clock::now();
-  // auto elapsed1 =
-  //     std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  // std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
-  //           << " seconds." << std::endl;
+  auto end1 = std::chrono::steady_clock::now();
+  auto elapsed1 =
+      std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+  std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
+            << " seconds." << std::endl;
   
 
   // ##################################################################

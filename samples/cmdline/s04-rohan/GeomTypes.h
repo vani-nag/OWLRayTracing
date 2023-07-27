@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 1000000;
+constexpr int NUM_POINTS = 5;
 
 using namespace owl;
 using namespace std;
@@ -40,27 +40,26 @@ using namespace std;
     }
   };
 
-  // ==================================================================
-  /* the raw geometric shape of a sphere, without material - this is
-     what goes into intersection and bounds programs */
-  // ==================================================================
-  struct Sphere {
-    vec3f center;
-    float mass;
+  /* variables for the triangle mesh geometry */
+  struct TrianglesGeomData
+  {
+    /*! array/buffer of vertex indices */
+    vec3i *index;
+    /*! array/buffer of vertex positions */
+    vec3f *vertex;
   };
 
-  struct SpheresGeom {
-    Sphere *prims;
-    float rad;
-  };
-
-  // ==================================================================
-  /* and finally, input for raygen and miss programs */
-  // ==================================================================
+  /* variables for the ray generation program */
   struct RayGenData
   {
-    OptixTraversableHandle *worlds;
-    Point *points;
+    OptixTraversableHandle world;
+  };
+
+  /* variables for the miss program */
+  struct MissProgData
+  {
+    vec3f  color0;
+    vec3f  color1;
   };
 
   struct PerRayData
@@ -70,10 +69,6 @@ using namespace std;
 
 	struct MyGlobals 
 	{	
-		int yIDx;
-    int xIDxOffset;
-    int parallelLaunch;
-    u_int *outputIntersectionData;
     long int *nodesPerLevel;
 	};
 
