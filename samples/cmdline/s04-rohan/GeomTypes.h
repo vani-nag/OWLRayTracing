@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 5;
+constexpr int NUM_POINTS = 3000000;
 
 using namespace owl;
 using namespace std;
@@ -80,6 +80,8 @@ using namespace std;
     chrono::microseconds forceCalculationTime;
     chrono::microseconds cpuForceCalculationTime;
     chrono::microseconds intersectionsSetupTime;
+    chrono::microseconds treePathsRecrusiveSetupTime;
+    chrono::microseconds treePathsIterativeSetupTime;
 
     ProfileStatistics() : intersectionsTime(0), sceneBuildTime(0), totalProgramTime(0), treeBuildTime(0), forceCalculationTime(0), cpuForceCalculationTime(0), 
     intersectionsSetupTime(0) {}

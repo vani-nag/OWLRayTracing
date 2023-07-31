@@ -68,6 +68,7 @@ float gridSize = GRID_SIZE;
 vector<long int> nodesPerLevel;
 long int maxNodesPerLevel = 0;
 ProfileStatistics *profileStats = new ProfileStatistics();
+int numPaths = 0;
 
 // force calculation global variables
 vector<vector<Node>> bhNodes;
@@ -144,6 +145,69 @@ OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 //   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 // }
 
+// fun to check leaf node
+bool isleafnode(Node* root)
+{
+    return (root->ne == nullptr);
+}
+
+
+void findUniquePathsRecursive(Node* root, std::vector<std::string>& paths, std::string currentPath) {
+    if (!root || root->mass == 0.0f) {
+        return;
+    }
+
+    // Add the current node's value to the currentPath
+    currentPath += to_string(root->s) + " ";
+
+    if (isleafnode(root)) {
+        // If we reach a leaf node, the current path is complete, add it to the paths vector
+        paths.push_back(currentPath);
+        numPaths++;
+        return;
+    }
+
+    // Recursively explore all four children of the current node
+    findUniquePathsRecursive(root->nw, paths, currentPath);
+    findUniquePathsRecursive(root->ne, paths, currentPath);
+    findUniquePathsRecursive(root->sw, paths, currentPath);
+    findUniquePathsRecursive(root->se, paths, currentPath);
+}
+
+void findUniquePathsIterative(Node* root, std::vector<std::string>& paths) {
+    if (!root) {
+        return;
+    }
+
+    std::stack<std::pair<Node*, std::string>> stack;
+    stack.push(std::make_pair(root, ""));
+
+    while (!stack.empty()) {
+        Node* current = stack.top().first;
+        std::string currentPath = stack.top().second;
+        stack.pop();
+
+        // Add the current node's value to the currentPath
+        currentPath += to_string(root->s) + " ";
+
+        if (isleafnode(current)) {
+            // If we reach a leaf node, the current path is complete, add it to the paths vector
+            paths.push_back(currentPath);
+            numPaths++;
+        } else {
+            // Push the children nodes onto the stack
+            if(current->nw)
+                stack.push(std::make_pair(current->nw, currentPath));
+            if(current->ne)
+                stack.push(std::make_pair(current->ne, currentPath));
+            if(current->se)
+                stack.push(std::make_pair(current->se, currentPath));
+            if(current->sw)
+                stack.push(std::make_pair(current->sw, currentPath));
+        }
+    }
+}
+
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
   
@@ -164,26 +228,26 @@ int main(int ac, char **av) {
   vector<vec3f> vertices;
   vector<vec3i> indices;
   vector<Point> points;
-  Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
-  Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
-  Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
-  Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
-  Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
-  points.push_back(p0);
-  points.push_back(p1);
-  points.push_back(p2);
-  points.push_back(p3);
-  points.push_back(p4);
+  // Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
+  // Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
+  // Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
+  // Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
+  // Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
+  // points.push_back(p0);
+  // points.push_back(p1);
+  // points.push_back(p2);
+  // points.push_back(p3);
+  // points.push_back(p4);
 
-  // for (int i = 0; i < NUM_POINTS; ++i) {
-  //   Point p;
-  //   p.x = dis(gen);
-  //   p.y = dis(gen);
-  //   p.mass = disMass(gen);
-  //   p.idX = i;
-  //   points.push_back(p);
-  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-  // }
+  for (int i = 0; i < NUM_POINTS; ++i) {
+    Point p;
+    p.x = dis(gen);
+    p.y = dis(gen);
+    p.mass = disMass(gen);
+    p.idX = i;
+    points.push_back(p);
+    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  }
 
   for(int i = 1; i < points.size() + 1; i++) {
     vertices.push_back(vec3f{static_cast<float>(i), 0.0f, -0.5f});
@@ -208,7 +272,22 @@ int main(int ac, char **av) {
   auto tree_build_time_end = chrono::steady_clock::now();
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
 
-  tree->printTree(root, 0, "root");
+  //tree->printTree(root, 0, "root");
+  auto find_paths_time_start = chrono::steady_clock::now();
+  //printRootToLeaf(root);
+  std::vector<std::string> paths;
+  findUniquePathsRecursive(root, paths, "");
+  LOG("Number of paths: " << numPaths);
+  auto find_paths_time_end = chrono::steady_clock::now();
+  profileStats->treePathsRecrusiveSetupTime += chrono::duration_cast<chrono::microseconds>(find_paths_time_end - find_paths_time_start);
+
+  auto find_paths_iterative_time_start = chrono::steady_clock::now();
+  numPaths = 0;
+  std::vector<std::string> pathsIterative;
+  findUniquePathsIterative(root, pathsIterative);
+  LOG("Number of paths: " << numPaths);
+  auto find_paths_iterative_time_end = chrono::steady_clock::now();
+  profileStats->treePathsIterativeSetupTime += chrono::duration_cast<chrono::microseconds>(find_paths_iterative_time_end - find_paths_iterative_time_start);
 
   // Get the device ID
   cudaGetDevice(&deviceID);
@@ -407,7 +486,7 @@ int main(int ac, char **av) {
   // ##################################################################
   // compute real forces using cpu BH traversal
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  tree->computeForces(root, points, cpuComputedForces);
+  //tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
 
@@ -438,6 +517,8 @@ int main(int ac, char **av) {
   // Print Statistics
   printf("--------------------------------------------------------------\n");
   std::cout << "Tree build time: " << profileStats->treeBuildTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Tree Paths Recursive build time: " << profileStats->treePathsRecrusiveSetupTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Tree Paths Iterative build time: " << profileStats->treePathsIterativeSetupTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Scene build time: " << profileStats->sceneBuildTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Intersections setup time: " << profileStats->intersectionsSetupTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Intersections time: " << profileStats->intersectionsTime.count() / 1000000.0 << " seconds." << std::endl;
