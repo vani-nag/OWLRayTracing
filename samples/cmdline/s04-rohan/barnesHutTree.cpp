@@ -6,7 +6,7 @@
 
 using namespace owl;
 
-Node::Node(float x, float y, float s) : quadrantX(x), quadrantY(y), mass(0), s(s), centerOfMassX(0), centerOfMassY(0), nw(nullptr), ne(nullptr), sw(nullptr), se(nullptr) {}
+Node::Node(float x, float y, float s) : quadrantX(x), quadrantY(y), mass(0), s(s), centerOfMassX(0), centerOfMassY(0), numPoints(0), nw(nullptr), ne(nullptr), sw(nullptr), se(nullptr) {}
 
 BarnesHutTree::BarnesHutTree(float theta, float gridSize) : root(nullptr), theta(theta), gridSize(gridSize) {}
 

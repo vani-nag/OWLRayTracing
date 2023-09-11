@@ -52,9 +52,9 @@
   cout << "#owl.sample(main): " << message << endl;    \
   cout << OWL_TERMINAL_DEFAULT;
 
-#define BYTES_PER_BATCH 4000000000.0 // 6gb max
-
 extern "C" char deviceCode_ptx[];
+
+#define RAYS_ARRAY_SIZE 4000000000.0 // 6gb max
 
 // random init
 random_device rd;
@@ -68,10 +68,13 @@ float gridSize = GRID_SIZE;
 vector<long int> nodesPerLevel;
 long int maxNodesPerLevel = 0;
 ProfileStatistics *profileStats = new ProfileStatistics();
-int numPaths = 0;
+u_int *deviceOutputIntersectionData;
 
 // force calculation global variables
-vector<vector<Node>> bhNodes;
+vector<CustomRay> primaryLaunchRays(NUM_POINTS);
+vector<deviceBhNode> deviceBhNodes;
+deviceBhNode *deviceBhNodesPointer;
+Point *devicePoints;
 int totalNumNodes = 0;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
@@ -80,144 +83,8 @@ vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
-// const int NUM_VERTICES = 6;
-// vec3f vertices[NUM_VERTICES] =
-//   {
-//     { +1.f, 0.0f,-0.5f },
-//     { +1.f,-0.5f,0.5f },
-//     { +1.f,+0.5f,+0.5f },
-//     { +2.f, 0.0f,-0.5f },
-//     { +2.f,-0.5f,0.5f },
-//     { +2.f,+0.5f,+0.5f }
-//   };
-
-// const int NUM_INDICES = 2;
-// vec3i indices[NUM_INDICES] =
-//   {
-//     { 0,1,2 },
-//     { 3,4,5 }
-//   };
-
-// // ##################################################################
-// // Create world function
-// // ##################################################################
-// OptixTraversableHandle createSceneGivenGeometries(vector<Sphere> Spheres, float spheresRadius) {
-
-//   // Create Spheres Buffer
-//   OWLBuffer SpheresBuffer = owlDeviceBufferCreate(
-//       context, OWL_USER_TYPE(Spheres[0]), Spheres.size(), Spheres.data());
-
-//   OWLGeom SpheresGeometry = owlGeomCreate(context, SpheresGeomType);
-//   owlGeomSetPrimCount(SpheresGeometry, Spheres.size());
-//   owlGeomSetBuffer(SpheresGeometry, "prims", SpheresBuffer);
-//   owlGeomSet1f(SpheresGeometry, "rad", spheresRadius);
-
-//   // Setup accel group
-//   OWLGeom userGeoms[] = {SpheresGeometry};
-
-//   OWLGroup spheresGroup = owlUserGeomGroupCreate(context, 1, userGeoms);
-//   owlGroupBuildAccel(spheresGroup);
-
-//   OWLGroup world = owlInstanceGroupCreate(context, 1, &spheresGroup);
-//   owlGroupBuildAccel(world);
-
-//   size_t final_memory_usage = 0;
-//   size_t peak_memory_usage = 0;
-//   owlGroupGetAccelSize(world, &final_memory_usage, &peak_memory_usage);
-
-//   printf("Final memory usage is %lu, and peak memory usage is %lu\n", final_memory_usage, peak_memory_usage);
-
-//   //LOG_OK("Built world for grid size: " << gridSize << " and sphere radius : " << spheresRadius);
-
-//   // return created scene/world
-//   return owlGroupGetTraversable(world, deviceID);
-// }
-
-// float computeObjectsAttractionForce(Point point, Node bhNode) {
-//   float mass_one = point.mass;
-//   float mass_two = bhNode.mass;
-
-//   // distance calculation
-//   float dx = point.x - bhNode.centerOfMassX;
-//   float dy = point.y - bhNode.centerOfMassY;
-//   float r_2 = (dx * dx) + (dy * dy);
-
-//   return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
-// }
-
-// fun to check leaf node
-bool isleafnode(Node* root)
-{
-    return (root->ne == nullptr);
-}
-
-
-void findUniquePathsRecursive(Node* root, std::vector<std::string>& paths, std::string currentPath) {
-    if (!root || root->mass == 0.0f) {
-        return;
-    }
-
-    // Add the current node's value to the currentPath
-    currentPath += to_string(root->s) + " ";
-
-    if (isleafnode(root)) {
-        // If we reach a leaf node, the current path is complete, add it to the paths vector
-        paths.push_back(currentPath);
-        numPaths++;
-        return;
-    }
-
-    // Recursively explore all four children of the current node
-    findUniquePathsRecursive(root->nw, paths, currentPath);
-    findUniquePathsRecursive(root->ne, paths, currentPath);
-    findUniquePathsRecursive(root->sw, paths, currentPath);
-    findUniquePathsRecursive(root->se, paths, currentPath);
-}
-
-void findUniquePathsIterative(Node* root, std::vector<std::string>& paths) {
-    if (!root) {
-        return;
-    }
-
-    std::stack<std::pair<Node*, std::string>> stack;
-    stack.push(std::make_pair(root, ""));
-
-    while (!stack.empty()) {
-        Node* current = stack.top().first;
-        std::string currentPath = stack.top().second;
-        stack.pop();
-
-        // Add the current node's value to the currentPath
-        currentPath += to_string(root->s) + " ";
-
-        if (isleafnode(current)) {
-            // If we reach a leaf node, the current path is complete, add it to the paths vector
-            paths.push_back(currentPath);
-            numPaths++;
-        } else {
-            // Push the children nodes onto the stack
-            if(current->nw)
-                stack.push(std::make_pair(current->nw, currentPath));
-            if(current->ne)
-                stack.push(std::make_pair(current->ne, currentPath));
-            if(current->se)
-                stack.push(std::make_pair(current->se, currentPath));
-            if(current->sw)
-                stack.push(std::make_pair(current->sw, currentPath));
-        }
-    }
-}
-
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
-  
-  // char *newBitmap = createBitmap(8, true);
-  // for(int i = 0; i < 8; i++) {
-  //   printf("Value at index: %d is %d\n", i, getBitAtPositionInBitmap(newBitmap, i));
-  //   setBitAtPositionInBitmap(newBitmap, i, 1);
-  //   printf("Value at index: %d is %d\n", i, getBitAtPositionInBitmap(newBitmap, i));
-  // }
-
 
   // ##################################################################
   // Building Barnes Hut Tree
@@ -238,6 +105,21 @@ int main(int ac, char **av) {
   // points.push_back(p2);
   // points.push_back(p3);
   // points.push_back(p4);
+  // primaryLaunchRays[0].pointID = 0;
+  // primaryLaunchRays[0].primID = 0;
+  // primaryLaunchRays[0].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // primaryLaunchRays[1].pointID = 1;
+  // primaryLaunchRays[1].primID = 0;
+  // primaryLaunchRays[1].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // primaryLaunchRays[2].pointID = 2;
+  // primaryLaunchRays[2].primID = 0;
+  // primaryLaunchRays[2].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // primaryLaunchRays[3].pointID = 3;
+  // primaryLaunchRays[3].primID = 0;
+  // primaryLaunchRays[3].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // primaryLaunchRays[4].pointID = 4;
+  // primaryLaunchRays[4].primID = 0;
+  // primaryLaunchRays[4].orgin = vec3f(0.0f, 0.0f, 0.0f);
 
   for (int i = 0; i < NUM_POINTS; ++i) {
     Point p;
@@ -247,20 +129,17 @@ int main(int ac, char **av) {
     p.idX = i;
     points.push_back(p);
     //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-  }
-
-  for(int i = 1; i < points.size() + 1; i++) {
-    vertices.push_back(vec3f{static_cast<float>(i), 0.0f, -0.5f});
-    vertices.push_back(vec3f{static_cast<float>(i), -0.5f, 0.5f});
-    vertices.push_back(vec3f{static_cast<float>(i), 0.5f, 0.5f});
-  }
-
-  for(int i = 0; i < vertices.size(); i+=3) {
-    indices.push_back(vec3i{i, i+1, i+2});
+    primaryLaunchRays[i].pointID = i;
+    primaryLaunchRays[i].primID = 0;
+    primaryLaunchRays[i].orgin = vec3f(0.0f, 0.0f, 0.0f);
   }
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
+  
+  OWLBuffer primaryLaunchRaysBuffer
+    = owlDeviceBufferCreate(context,OWL_USER_TYPE(primaryLaunchRays[0]),
+                            primaryLaunchRays.size(),primaryLaunchRays.data());
 
 
   LOG("Bulding Tree with # Of Bodies = " << points.size());
@@ -273,25 +152,138 @@ int main(int ac, char **av) {
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
 
   //tree->printTree(root, 0, "root");
-  auto find_paths_time_start = chrono::steady_clock::now();
-  //printRootToLeaf(root);
-  std::vector<std::string> paths;
-  findUniquePathsRecursive(root, paths, "");
-  LOG("Number of paths: " << numPaths);
-  auto find_paths_time_end = chrono::steady_clock::now();
-  profileStats->treePathsRecrusiveSetupTime += chrono::duration_cast<chrono::microseconds>(find_paths_time_end - find_paths_time_start);
-
-  auto find_paths_iterative_time_start = chrono::steady_clock::now();
-  numPaths = 0;
-  std::vector<std::string> pathsIterative;
-  findUniquePathsIterative(root, pathsIterative);
-  LOG("Number of paths: " << numPaths);
-  auto find_paths_iterative_time_end = chrono::steady_clock::now();
-  profileStats->treePathsIterativeSetupTime += chrono::duration_cast<chrono::microseconds>(find_paths_iterative_time_end - find_paths_iterative_time_start);
 
   // Get the device ID
   cudaGetDevice(&deviceID);
   LOG_OK("Device ID: " << deviceID);
+
+  // ##################################################################
+  // Level order traversal of Barnes Hut Tree to build worlds
+  // ##################################################################
+
+  float prevS = gridSize;
+  float nextGridSize = gridSize / 2.0;
+  int level = 0;
+  long int currentNodesPerLevel = 0;
+  int currentIndex = 0;
+  float triangleXLocation = 0;
+  float rayOriginXLocation = 0;
+  int primIDIndex = 1;
+
+  // level order traversal of BarnesHutTree
+  // Create an empty queue for level order traversal
+  queue<Node*> q;
+  
+  LOG("Bulding OWL Scenes");
+  // Enqueue Root and initialize height
+  q.push(root);
+  auto scene_build_time_start = chrono::steady_clock::now();
+  while (q.empty() == false) {
+      // Print front of queue and remove it from queue
+      Node* node = q.front();
+      if((node->s != prevS)) {
+        if(currentNodesPerLevel > maxNodesPerLevel) maxNodesPerLevel = currentNodesPerLevel;
+        prevS = node->s;
+        gridSize = node->s;
+        nextGridSize = gridSize / 2.0;
+        level += 1;
+        nodesPerLevel.push_back(currentNodesPerLevel);
+        currentNodesPerLevel = 0;
+        triangleXLocation = 0.0f;
+        rayOriginXLocation = 0.0f;
+      } 
+
+      if(node->s == gridSize) {
+        if(node->mass != 0.0f) {
+          if(node->ne == nullptr) {
+            node->isLeaf = true;
+          } else {
+            node->isLeaf = false;
+          }
+          // add triangle to scene corresponding to barnes hut node
+          triangleXLocation += gridSize;
+          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.0f + level, -0.5f});
+          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), -0.5f + level, 0.5f});
+          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.5f + level, 0.5f});
+          indices.push_back(vec3i{currentIndex, currentIndex+1, currentIndex+2});
+          currentIndex += 3;
+
+          // add device bhNode to vector array
+          deviceBhNode currentBhNode;
+          int indexToInsertAt = 0;
+          currentBhNode.mass = node->mass;
+          currentBhNode.s = node->s;
+          currentBhNode.centerOfMassX = node->centerOfMassX;
+          currentBhNode.centerOfMassY = node->centerOfMassY;
+          if(node->nw && node->nw->mass != 0.0f) {
+            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
+            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
+            rayOriginXLocation += nextGridSize;
+            indexToInsertAt++;
+            primIDIndex++;
+          }
+          if(node->ne && node->ne->mass != 0.0f) {
+            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
+            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
+            rayOriginXLocation += nextGridSize;
+            indexToInsertAt++;
+            primIDIndex++;
+          }
+          if(node->sw && node->sw->mass != 0.0f) {
+            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
+            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
+            rayOriginXLocation += nextGridSize;
+            indexToInsertAt++;
+            primIDIndex++;
+          }
+          if(node->se && node->se->mass != 0.0f) {
+            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
+            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
+            rayOriginXLocation += nextGridSize;
+            indexToInsertAt++;
+            primIDIndex++;
+          }
+          currentBhNode.numChildren = indexToInsertAt;
+          deviceBhNodes.push_back(currentBhNode);
+
+          // update counters
+          totalNumNodes++; currentNodesPerLevel++;
+        }
+      }
+      q.pop();
+
+      /* Enqueue left child */
+      if (node->nw != NULL)
+          q.push(node->nw);
+
+      /*Enqueue right child */
+      if (node->ne != NULL)
+          q.push(node->ne);
+      
+      /* Enqueue left child */
+      if (node->sw != NULL)
+          q.push(node->sw);
+
+      /*Enqueue right child */
+      if (node->se != NULL)
+          q.push(node->se);
+  }
+  
+  // last level of BH tree check gets missed so this is to account for it
+  nodesPerLevel.push_back(currentNodesPerLevel);
+  if(currentNodesPerLevel > maxNodesPerLevel) maxNodesPerLevel = currentNodesPerLevel;
+
+  printf("Max nodes per level = %lu\n", maxNodesPerLevel);
+
+  for(int i = 0; i < nodesPerLevel.size(); i++) {
+    printf("Level %d -- %lu nodes\n", i, nodesPerLevel[i]);
+  }
+
+  OWLBuffer deviceBhNodesBuffer
+    = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),
+                            deviceBhNodes.size(),deviceBhNodes.data());
+
+  // create Triangles geomtery and create acceleration structure
   OWLVarDecl trianglesGeomVars[] = {
     { "index",  OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,index)},
     { "vertex", OWL_BUFPTR, OWL_OFFSETOF(TrianglesGeomData,vertex)},
@@ -348,106 +340,51 @@ int main(int ac, char **av) {
 
   OWLVarDecl myGlobalsVars[] = {
     {"nodesPerLevel", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, nodesPerLevel)},
+    {"deviceBhNodes", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, deviceBhNodes)},
+    {"devicePoints", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, devicePoints)},
+    {"level", OWL_INT, OWL_OFFSETOF(MyGlobals, level)},
+    {"computedForces", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, computedForces)},
+    {"raysToLaunch", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, raysToLaunch)},
+    {"rayObjectsToLaunch", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, rayObjectsToLaunch)},
     {/* sentinel to mark end of list */}};
 
   OWLParams lp = owlParamsCreate(context, sizeof(MyGlobals), myGlobalsVars, -1);
 
-  // ##################################################################
-  // Level order traversal of Barnes Hut Tree to build worlds
-  // ##################################################################
+  OWLBuffer NodesPerLevelBuffer = owlDeviceBufferCreate( 
+     context, OWL_USER_TYPE(nodesPerLevel[0]), nodesPerLevel.size(), nodesPerLevel.data());
+  owlParamsSetBuffer(lp, "nodesPerLevel", NodesPerLevelBuffer);
 
-  // vector<Node> InternalNodes;
-  // float prevS = gridSize;
-  // int level = 0;
+  OWLBuffer DevicePointsBuffer = owlDeviceBufferCreate( 
+     context, OWL_USER_TYPE(points[0]), points.size(), points.data());
+  owlParamsSetBuffer(lp, "devicePoints", DevicePointsBuffer);
 
-  // // level order traversal of BarnesHutTree
-  // // Create an empty queue for level order traversal
-  // queue<Node*> q;
+  OWLBuffer DeviceBhNodesBuffer = owlDeviceBufferCreate( 
+     context, OWL_USER_TYPE(deviceBhNodes[0]), deviceBhNodes.size(), deviceBhNodes.data());
+  owlParamsSetBuffer(lp, "deviceBhNodes", DeviceBhNodesBuffer);
+
+  OWLBuffer ComputedForcesBuffer = owlManagedMemoryBufferCreate( 
+     context, OWL_FLOAT, NUM_POINTS, nullptr);
+  owlParamsSetBuffer(lp, "computedForces", ComputedForcesBuffer);
+
+  int raysToLaunchInit = 0;
+  OWLBuffer RaysToLaunchBuffer = owlManagedMemoryBufferCreate( 
+     context, OWL_INT, 1, &raysToLaunchInit);
+  owlParamsSetBuffer(lp, "raysToLaunch", RaysToLaunchBuffer);
+
+  //printf("Size of custom ray is %lu\n", sizeof(CustomRay));
+  u_int numberOfRaysToLaunch = RAYS_ARRAY_SIZE / sizeof(CustomRay);
+  OWLBuffer NextLevelRaysToLaunchBuffer = owlManagedMemoryBufferCreate( 
+     context, OWL_USER_TYPE(CustomRay), numberOfRaysToLaunch, nullptr);
+  owlParamsSetBuffer(lp, "rayObjectsToLaunch", NextLevelRaysToLaunchBuffer);
   
-  // LOG("Bulding OWL Scenes");
-  // // Enqueue Root and initialize height
-  // q.push(root);
-  auto scene_build_time_start = chrono::steady_clock::now();
-  // float currentForces = 0;
-  // while (q.empty() == false) {
-  //     // Print front of queue and remove it from queue
-  //     Node* node = q.front();
-  //     if((node->s != prevS)) {
-  //       if(!InternalSpheres.empty()) {
-  //         worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
-  //         // if(!offsetPerLevel.empty()) {
-  //         //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
-  //         // } else {
-  //         //   offsetPerLevel.push_back(0);
-  //         // }
-  //         nodesPerLevel.push_back(InternalSpheres.size());
-  //         if(maxNodesPerLevel < InternalSpheres.size()) {
-  //           maxNodesPerLevel = InternalSpheres.size();
-  //         }
-  //         bhNodes.push_back(InternalNodes);
-  //       } else {
-  //         LOG_OK("Spheres r empty!");
-  //       }
-  //       InternalSpheres.clear();
-  //       InternalNodes.clear();
-  //       prevS = node->s;
-  //       gridSize = node->s;
-  //       level += 1;
-  //     } else {
-  //       //LOG_OK("HITS THIS!");
-  //     }
-  //     if(node->s == gridSize) {
-  //       if(node->mass != 0.0f) {
-  //         if(node->ne == nullptr) {
-  //           node->isLeaf = true;
-  //         } else {
-  //           node->isLeaf = false;
-  //         }
-  //         InternalNodes.push_back((*node));
-  //         totalNumNodes += 1;
-  //         InternalSpheres.push_back(Sphere{vec3f{node->centerOfMassX, node->centerOfMassY, 0}, node->mass});
-  //       }
-  //     }
-  //     q.pop();
 
-  //     /* Enqueue left child */
-  //     if (node->nw != NULL)
-  //         q.push(node->nw);
-
-  //     /*Enqueue right child */
-  //     if (node->ne != NULL)
-  //         q.push(node->ne);
-      
-  //     /* Enqueue left child */
-  //     if (node->sw != NULL)
-  //         q.push(node->sw);
-
-  //     /*Enqueue right child */
-  //     if (node->se != NULL)
-  //         q.push(node->se);
-  // }
-
-  // // last level gets missed in while loop so this is to account for that
-  // if(!InternalSpheres.empty()) {
-  //   worlds.push_back(createSceneGivenGeometries(InternalSpheres, (gridSize / THRESHOLD)));
-  //   // if(!offsetPerLevel.empty()) {
-  //   //   offsetPerLevel.push_back((offsetPerLevel.back() + (NUM_POINTS * nodesPerLevel.back())));
-  //   // } else {
-  //   //   offsetPerLevel.push_back(0);
-  //   // }
-  //   nodesPerLevel.push_back(InternalSpheres.size());
-  //   if(maxNodesPerLevel < InternalSpheres.size()) {
-  //     maxNodesPerLevel = InternalSpheres.size();
-  //   }
-  //   bhNodes.push_back(InternalNodes);
-  // }
-  
   // -------------------------------------------------------
   // set up ray gen program
   // -------------------------------------------------------
   OWLVarDecl rayGenVars[] = {
       //{"internalSpheres", OWL_BUFPTR, OWL_OFFSETOF(RayGenData, internalSpheres)},
       {"world", OWL_GROUP, OWL_OFFSETOF(RayGenData, world)},
+      {"primaryLaunchRays",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,primaryLaunchRays)},
       {/* sentinel to mark end of list */}};
 
   // ........... create object  ............................
@@ -456,6 +393,7 @@ int main(int ac, char **av) {
 
   // ----------- set variables  ----------------------------
   owlRayGenSetGroup(rayGen, "world", world);
+  owlRayGenSetBuffer(rayGen, "primaryLaunchRays", primaryLaunchRaysBuffer);
 
   // programs have been built before, but have to rebuild raygen and
   // miss progs
@@ -467,37 +405,46 @@ int main(int ac, char **av) {
   auto scene_build_time_end = chrono::steady_clock::now();
   profileStats->sceneBuildTime += chrono::duration_cast<chrono::microseconds>(scene_build_time_end - scene_build_time_start);
 
+  auto intersections_setup_time_start = chrono::steady_clock::now();
+
+  printf("Size of malloc for bhNodes is %.2f gb.\n", (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0);
+  printf("Size of malloc for points is %.2f gb.\n", (points.size() * sizeof(Point))/1000000000.0);
+  
+  auto intersections_setup_time_end = chrono::steady_clock::now();
+  profileStats->intersectionsSetupTime += chrono::duration_cast<chrono::microseconds>(intersections_setup_time_end - intersections_setup_time_start);
 
   // ##################################################################
   // Start Ray Tracing Parallel launch
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
-  owlLaunch2D(rayGen, 1, 1, lp);
-
+  for(int i = 0; i < nodesPerLevel.size(); i++) {
+    owlParamsSet1i(lp, "level", i);
+    //owlBufferUpload(RaysToLaunchBuffer, &raysToLaunchInit, 0, 1);
+    owlLaunch2D(rayGen, NUM_POINTS, 1, lp);
+    const CustomRay *raysToLaunchOutput = (const CustomRay *)owlBufferGetPointer(NextLevelRaysToLaunchBuffer,0);
+    //printf("Number of rays to launch for level %d is %d.\n", i, *raysToLaunchOutput);
+    break;
+  }
+  const float *rtComputedForces = (const float *)owlBufferGetPointer(ComputedForcesBuffer,0);
   auto end1 = std::chrono::steady_clock::now();
-  auto elapsed1 =
-      std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  std::cout << "Intersections time for parallel launch: " << elapsed1.count() / 1000000.0
-            << " seconds." << std::endl;
-  
+  profileStats->forceCalculationTime = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
 
   // ##################################################################
   // Output Force Computations
   // ##################################################################
   // compute real forces using cpu BH traversal
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  //tree->computeForces(root, points, cpuComputedForces);
+  tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
 
-
   // for(int i = 0; i < NUM_POINTS; i++) {
-  //   float percent_error = (abs((computedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
   //   if(percent_error > .5f) {
   //     LOG_OK("++++++++++++++++++++++++");
   //     LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
   //     LOG_OK("++++++++++++++++++++++++");
-  //     printf("RT force = %f\n", computedForces[i]);
+  //     printf("RT force = %f\n", rtComputedForces[i]);
   //     printf("CPU force = %f\n", cpuComputedForces[i]);
   //     LOG_OK("++++++++++++++++++++++++");
   //     printf("\n");

@@ -21,23 +21,20 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 3000000;
+constexpr int NUM_POINTS = 10000;
 
 using namespace owl;
 using namespace std;
 
-  struct NodePersistenceInfo {
-    Node bhNode;
-    uint8_t dontTraverse;
-
-    NodePersistenceInfo() {
-      dontTraverse = 0;
-    }
-
-    NodePersistenceInfo(Node node, uint8_t value) {
-      bhNode = node;
-      dontTraverse = value;
-    }
+  struct deviceBhNode {
+    float mass;
+    float s;
+    float centerOfMassX;
+    float centerOfMassY;
+    vec3f children[4];
+    int primIds[4];
+    uint8_t numChildren;
+    //bool isLeaf;
   };
 
   /* variables for the triangle mesh geometry */
@@ -49,10 +46,22 @@ using namespace std;
     vec3f *vertex;
   };
 
+  struct CustomRay 
+  {
+    vec3f orgin;
+    int primID;
+    int pointID;
+
+    // Constructor
+    // CustomRay(vec3f org, int prID, int poID) : orgin(org), primID(prID), pointID(poID) {}
+    //CustomRay() : orgin(vec3f(0.0f, 0.0f, 0.0f)), primID(0), pointID(0) {}
+  };
+
   /* variables for the ray generation program */
   struct RayGenData
   {
     OptixTraversableHandle world;
+    CustomRay *primaryLaunchRays;
   };
 
   /* variables for the miss program */
@@ -64,12 +73,22 @@ using namespace std;
 
   struct PerRayData
   {
-    int intersections;
+    float r_2;
+    int pointID;
+    int primID;
+    CustomRay rays[400];
+    int insertIndex; 
   };
 
 	struct MyGlobals 
 	{	
     long int *nodesPerLevel;
+    deviceBhNode *deviceBhNodes;
+    Point *devicePoints;
+    int level;
+    float *computedForces;
+    int *raysToLaunch;
+    CustomRay *rayObjectsToLaunch;
 	};
 
   struct ProfileStatistics {

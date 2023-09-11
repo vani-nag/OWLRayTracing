@@ -7,6 +7,7 @@
 #define GRID_SIZE 10.0f
 #define THRESHOLD 0.5f
 #define GRAVITATIONAL_CONSTANT .0001f
+#define MAX_POINTS_PER_LEAF 32
 
 namespace owl {
 
@@ -23,6 +24,8 @@ namespace owl {
     float quadrantY;
     float mass;
     float s;
+    uint8_t numPoints;
+    int pointsIdx[MAX_POINTS_PER_LEAF];
     float centerOfMassX;
     float centerOfMassY;
     Node* nw;
@@ -44,6 +47,7 @@ namespace owl {
       se = nullptr;
       isLeaf = false;
     }
+
   };
 
   class BarnesHutTree {
