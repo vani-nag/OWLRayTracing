@@ -73,7 +73,13 @@ OPTIX_MISS_PROGRAM(miss)()
   //          OWL_TERMINAL_RED,
   //          OWL_TERMINAL_DEFAULT);
   PerRayData &prd = owl::getPRD<PerRayData>();
-  deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.primID];
+  int insertIndex = prd.insertIndex;
+
+  if(insertIndex == 0)
+    deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.primID];
+  else {
+    deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.rays[insertIndex-1].primID];
+  }
   if(bhNode.numChildren == 0) {
     optixLaunchParams.computedForces[prd.pointID] += (((optixLaunchParams.devicePoints[prd.pointID].mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
     // if(prd.pointID == 0) {
@@ -82,15 +88,14 @@ OPTIX_MISS_PROGRAM(miss)()
     //        OWL_TERMINAL_DEFAULT);
     // }
   } else {
-    for(int i = 0; i < bhNode.numChildren; i++) {
-      CustomRay rayObject;
-      rayObject.primID = bhNode.primIds[i];
-      rayObject.pointID = prd.pointID;
-      rayObject.orgin = bhNode.children[i];
-      prd.rays[prd.insertIndex] = rayObject;
-      prd.insertIndex += 1;
-      //if(prd.pointID == 0) printf("PrimID: %d\n", rayObject.primID);
-    }
+    CustomRay rayObject;
+    rayObject.primID = bhNode.primIds[prd.nextChildIndex[insertIndex]];
+    rayObject.pointID = prd.pointID;
+    rayObject.orgin = bhNode.children[prd.nextChildIndex[insertIndex]];
+    prd.rays[insertIndex] = rayObject;
+    prd.nextChildIndex[insertIndex] += 1;
+    prd.insertIndex += 1;
+    //if(prd.pointID == 0) printf("PrimID: %d\n", rayObject.primID);
   }
   //atomicAdd(optixLaunchParams.raysToLaunch, bhNode.numChildren);
 

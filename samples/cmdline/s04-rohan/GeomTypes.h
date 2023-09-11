@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 10000;
+constexpr int NUM_POINTS = 1000;
 
 using namespace owl;
 using namespace std;
@@ -76,7 +76,8 @@ using namespace std;
     float r_2;
     int pointID;
     int primID;
-    CustomRay rays[400];
+    CustomRay rays[50];
+    uint8_t nextChildIndex[50];
     int insertIndex; 
   };
 
