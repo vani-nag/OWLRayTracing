@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 1000;
+constexpr int NUM_POINTS = 1000000;
 
 using namespace owl;
 using namespace std;
@@ -31,10 +31,11 @@ using namespace std;
     float s;
     float centerOfMassX;
     float centerOfMassY;
-    vec3f children[4];
-    int primIds[4];
-    uint8_t numChildren;
-    //bool isLeaf;
+    vec3f nextRayLocation;
+    int nextPrimId;
+    vec3f autoRopeRayLocation;
+    int autoRopePrimId;
+    uint8_t isLeaf;
   };
 
   /* variables for the triangle mesh geometry */
@@ -76,9 +77,11 @@ using namespace std;
     float r_2;
     int pointID;
     int primID;
-    CustomRay rays[50];
-    uint8_t nextChildIndex[50];
-    int insertIndex; 
+    CustomRay rayToLaunch;
+    uint8_t rayEnd;
+    //CustomRay rays[50];
+    //uint8_t nextChildIndex[50];
+    //int insertIndex; 
   };
 
 	struct MyGlobals 
@@ -86,7 +89,7 @@ using namespace std;
     long int *nodesPerLevel;
     deviceBhNode *deviceBhNodes;
     Point *devicePoints;
-    int level;
+    int numPrims;
     float *computedForces;
     int *raysToLaunch;
     CustomRay *rayObjectsToLaunch;

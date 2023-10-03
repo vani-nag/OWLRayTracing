@@ -58,11 +58,17 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[primID];
 
   optixLaunchParams.computedForces[prd.pointID] += (((point.mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
+  CustomRay rayObject;
+  rayObject.primID = bhNode.autoRopePrimId;
+  rayObject.orgin = bhNode.autoRopeRayLocation;
+  rayObject.pointID = prd.pointID;
+  prd.rayToLaunch = rayObject;
+
   // if(prd.pointID == 0) {
-  //   printf("%sIntersected yay!%s\n",
+  // printf("%sIntersected yay!%s\n",
   //          OWL_TERMINAL_GREEN,
   //          OWL_TERMINAL_DEFAULT);
-  //   printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
+  // printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
   // }
 }
 
@@ -73,30 +79,24 @@ OPTIX_MISS_PROGRAM(miss)()
   //          OWL_TERMINAL_RED,
   //          OWL_TERMINAL_DEFAULT);
   PerRayData &prd = owl::getPRD<PerRayData>();
-  int insertIndex = prd.insertIndex;
 
-  if(insertIndex == 0)
-    deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.primID];
-  else {
-    deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.rays[insertIndex-1].primID];
-  }
-  if(bhNode.numChildren == 0) {
+  deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[prd.primID];;
+  
+  if(bhNode.isLeaf == 1) {
     optixLaunchParams.computedForces[prd.pointID] += (((optixLaunchParams.devicePoints[prd.pointID].mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
     // if(prd.pointID == 0) {
     // printf("%sHit leaf in miss yay!%s\n",
     //        OWL_TERMINAL_GREEN,
-    //        OWL_TERMINAL_DEFAULT);
-    // }
+    //        OWL_TERMINAL_DEFAULT); }
   } else {
-    CustomRay rayObject;
-    rayObject.primID = bhNode.primIds[prd.nextChildIndex[insertIndex]];
-    rayObject.pointID = prd.pointID;
-    rayObject.orgin = bhNode.children[prd.nextChildIndex[insertIndex]];
-    prd.rays[insertIndex] = rayObject;
-    prd.nextChildIndex[insertIndex] += 1;
-    prd.insertIndex += 1;
-    //if(prd.pointID == 0) printf("PrimID: %d\n", rayObject.primID);
+    //printf("PrimID: %d\n", prd.primID);
   }
+  CustomRay rayObject;
+  rayObject.primID = bhNode.nextPrimId;
+  rayObject.pointID = prd.pointID;
+  rayObject.orgin = bhNode.nextRayLocation;
+  prd.rayToLaunch = rayObject;
+  prd.rayEnd = 0;
   //atomicAdd(optixLaunchParams.raysToLaunch, bhNode.numChildren);
 
   //printf("Ray distance %f.\n", prd.r_2);
@@ -120,20 +120,27 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   prd.r_2 = (dx * dx) + (dy * dy);
   prd.pointID = currentRay.pointID;
   prd.primID = currentRay.primID;
-  prd.insertIndex = 0;
+  prd.rayEnd = 0;
+  //prd.insertIndex = 0;
   float rayLength = sqrtf(prd.r_2) * 0.5f;
-  // if(prd.pointID == 0) printf("dx: %f | dy: %f\n", dx, dy);
-  //if(prd.pointID == 0) printf("Index: %d | PrimID: %d | rayLength: %f\n", 0, prd.primID, rayLength);
+  // if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
+  // if(prd.pointID == 0) printf("Index: %d | PrimID: %d | rayLength: %f\n", 0, prd.primID, rayLength);
 
   // Launch rays
   int index = 0;
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
-  while(index <= prd.insertIndex) {
+  while(prd.rayEnd == 0) {
     if(rayLength != 0.0f) {
       owl::traceRay(self.world, ray, prd);
+    } else {
+      CustomRay rayObject;
+      rayObject.primID = bhNode.nextPrimId;
+      rayObject.pointID = prd.pointID;
+      rayObject.orgin = bhNode.nextRayLocation;
+      prd.rayToLaunch = rayObject;
     }
 
-    currentRay = prd.rays[index];
+    currentRay = prd.rayToLaunch;
     bhNode = optixLaunchParams.deviceBhNodes[currentRay.primID];
 
     dx = point.x - bhNode.centerOfMassX;
@@ -144,12 +151,14 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 
     ray.origin = currentRay.orgin;
     ray.tmax = rayLength;
-    // if(prd.pointID == 0) {
-    //   //printf("Index: %d | PrimID: %d | rayLength: %f\n", index, prd.rays[index].primID, rayLength);
-    //   printf("insertIndex: %d\n", prd.insertIndex);
-    // }
+    if(prd.primID >= optixLaunchParams.numPrims || prd.primID == 0) {
+      prd.rayEnd = 1;
+    }
     index++;
-
+    // if(prd.pointID == 0) {
+    //   printf("Index: %d | PrimID: %d | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, rayLength, ray.origin.x, ray.origin.y);
+    //   //printf("insertIndex: %d\n", prd.insertIndex);
+    // }
   }
 }
 

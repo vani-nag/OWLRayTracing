@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#define GRID_SIZE 10.0f
+#define GRID_SIZE 10000.0f
 #define THRESHOLD 0.5f
 #define GRAVITATIONAL_CONSTANT .0001f
 #define MAX_POINTS_PER_LEAF 32

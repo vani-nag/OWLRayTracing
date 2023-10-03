@@ -59,8 +59,8 @@ extern "C" char deviceCode_ptx[];
 // random init
 random_device rd;
 mt19937 gen(rd());
-uniform_real_distribution<float> dis(-5.0f, 5.0f);  // Range for X and Y coordinates
-uniform_real_distribution<float> disMass(0.1f, 20.0f);  // Range mass 
+uniform_real_distribution<float> dis(-5000.0f, 5000.0f);  // Range for X and Y coordinates
+uniform_real_distribution<float> disMass(100.0f, 2000.0f);  // Range mass 
 
 // global variables
 int deviceID;
@@ -80,8 +80,171 @@ vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
+vector<vec3f> vertices;
+vector<vec3i> indices;
+vector<Point> points;
+vector<Node*> dfsBHNodes;
+
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
+
+void dfsTreeSetup(Node *root) {
+  float prevS = gridSize;
+  float nextGridSize = gridSize / 2.0;
+  int level = 0;
+  long int currentNodesPerLevel = 0;
+  int currentIndex = 0;
+  float triangleXLocation = 0;
+  float rayOriginXLocation = 0;
+  int primIDIndex = 1;
+  int index = 0;
+
+  // level order traversal of BarnesHutTree
+  // Create an empty queue for level order traversal
+  
+  LOG("Bulding OWL Scenes");
+  // Enqueue Root and initialize height
+  while (index < dfsBHNodes.size()) {
+      // Print front of queue and remove it from queue
+      Node* node = dfsBHNodes[index];
+
+      if(node->mass != 0.0f) {
+        if(node->ne == nullptr) {
+          node->isLeaf = true;
+        } else {
+          node->isLeaf = false;
+        }
+        // add triangle to scene corresponding to barnes hut node
+        triangleXLocation += node->s;
+        //printf("Triangle Location %f\n", triangleXLocation);
+        vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.0f + level, -0.5f});
+        vertices.push_back(vec3f{static_cast<float>(triangleXLocation), -0.5f + level, 0.5f});
+        vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.5f + level, 0.5f});
+        indices.push_back(vec3i{currentIndex, currentIndex+1, currentIndex+2});
+        currentIndex += 3;
+
+        // add device bhNode to vector array
+        deviceBhNode currentBhNode;
+        currentBhNode.mass = node->mass;
+        currentBhNode.s = node->s;
+        currentBhNode.centerOfMassX = node->centerOfMassX;
+        currentBhNode.centerOfMassY = node->centerOfMassY;
+        currentBhNode.isLeaf = node->isLeaf ? 1 : 0;
+        currentBhNode.nextRayLocation = vec3f{static_cast<float>(triangleXLocation), 0.0f, 0.0f};
+        currentBhNode.nextPrimId = primIDIndex;
+
+        deviceBhNodes.push_back(currentBhNode);
+        primIDIndex++;
+        // update counters
+        totalNumNodes++; //currentNodesPerLevel++;
+      }
+      index++;
+  }
+}
+
+void treeToDFSArray(Node *node, std::map<Node*, int>& addressToIndex, int& dfsIndex) {
+  if(node != nullptr) {
+    dfsBHNodes.push_back(node);
+    addressToIndex[node] = dfsIndex;
+    dfsIndex++;
+
+    if(node->nw != nullptr) {
+      if(node->nw->mass != 0.0f) treeToDFSArray(node->nw, addressToIndex, dfsIndex);
+      if(node->ne->mass != 0.0f) treeToDFSArray(node->ne, addressToIndex, dfsIndex);
+      if(node->sw->mass != 0.0f) treeToDFSArray(node->sw, addressToIndex, dfsIndex);
+      if(node->se->mass != 0.0f) treeToDFSArray(node->se, addressToIndex, dfsIndex);
+    }
+  }
+}
+
+void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
+  if (root == nullptr) {
+        return;
+    }
+
+    std::stack<Node*> ropeStack;
+    ropeStack.push(root);
+    int initial = 0;
+
+    while (!ropeStack.empty()) {
+      Node* currentNode = ropeStack.top();
+      //printf("Stack Node ---> ");
+      //std::cout << "Node: Mass = " << currentNode->mass << ", Center of Mass = (" << currentNode->centerOfMassX << ", " << currentNode->centerOfMassY << "), quadrant = (" << currentNode->quadrantX << ", " << currentNode->quadrantY << ")" << "\n";
+      ropeStack.pop();
+
+      int dfsIndex = addressToIndex[currentNode];
+      if(initial) {
+        //printf("Roping to ---> ");
+        if(ropeStack.size() != 0) {
+          Node* autoRopeNode = ropeStack.top();
+          int ropeIndex = addressToIndex[autoRopeNode];
+          //std::cout << "Node: Mass = " << autoRopeNode->mass << ", Center of Mass = (" << autoRopeNode->centerOfMassX << ", " << autoRopeNode->centerOfMassY << "), quadrant = (" << autoRopeNode->quadrantX << ", " << autoRopeNode->quadrantY << ")" << "\n";
+          deviceBhNodes[dfsIndex].autoRopeRayLocation = deviceBhNodes[ropeIndex-1].nextRayLocation;
+          deviceBhNodes[dfsIndex].autoRopePrimId = deviceBhNodes[ropeIndex-1].nextPrimId;
+        } else {
+          deviceBhNodes[dfsIndex].autoRopeRayLocation = vec3f{0.0f, 0.0f, 0.0f};
+          deviceBhNodes[dfsIndex].autoRopePrimId = 0;
+          //printf("END!\n");
+        }
+      } else {
+        initial = 1;
+      } 
+
+      // Enqueue child nodes in the desired order
+      if (currentNode->se && currentNode->se->mass != 0.0f) ropeStack.push(currentNode->se);
+      if (currentNode->sw && currentNode->sw->mass != 0.0f) ropeStack.push(currentNode->sw);
+      if (currentNode->ne && currentNode->ne->mass != 0.0f) ropeStack.push(currentNode->ne);
+      if (currentNode->nw && currentNode->nw->mass != 0.0f) ropeStack.push(currentNode->nw);
+    }
+
+}
+
+// void iterativeBFTQuadtree(Node* root, std::map<Node*, int> addressToIndex) {
+//     if (root == nullptr) {
+//         return;
+//     }
+
+//     std::queue<Node*> nodeQueue;
+//     nodeQueue.push(root);
+
+//     while (!nodeQueue.empty()) {
+//         Node* currentNode = nodeQueue.front();
+//         nodeQueue.pop();
+
+//         // Process
+//         if(currentNode->mass != 0.0f && nodeQueue.size() > 1) {
+//           Node* nextNode = nodeQueue.front();
+
+//           int dfsIndex = addressToIndex[currentNode];
+//           int nextIndex = addressToIndex[nextNode];
+
+//           if(deviceBhNodes[dfsIndex].s == deviceBhNodes[nextIndex].s) {
+//             printf("DfsIndex: %d\n", dfsIndex);
+//             printf("BfsNextIndex: %d\n", nextIndex);
+//             printf("Mass of dfs node %f\n", currentNode->mass);
+//             printf("Mass of next bfs node %f\n", nextNode->mass);
+//             deviceBhNodes[dfsIndex].autoRopeRayLocation = deviceBhNodes[nextIndex-1].nextRayLocation;
+//             deviceBhNodes[dfsIndex].autoRopePrimId = deviceBhNodes[nextIndex-1].nextPrimId; 
+//           } else {
+//             printf("----------------------\n");
+//             printf("Didnt match node!\n");
+//             printf("DfsIndex: %d\n", dfsIndex);
+//             printf("BfsNextIndex: %d\n", nextIndex);
+//             printf("Mass of dfs node %f\n", currentNode->mass);
+//             printf("Mass of next bfs node %f\n", nextNode->mass);
+//             printf("----------------------\n");
+//             deviceBhNodes[dfsIndex].autoRopeRayLocation = vec3f{0.0f, 0.0f, 0.0f};
+//             deviceBhNodes[dfsIndex].autoRopePrimId = 0; 
+//           }
+//         }
+
+//         // Enqueue child nodes in the desired order
+//         if (currentNode->nw) nodeQueue.push(currentNode->nw);
+//         if (currentNode->ne) nodeQueue.push(currentNode->ne);
+//         if (currentNode->sw) nodeQueue.push(currentNode->sw);
+//         if (currentNode->se) nodeQueue.push(currentNode->se);
+//     }
+// }
 
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
@@ -91,10 +254,6 @@ int main(int ac, char **av) {
   // ##################################################################
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
-
-  vector<vec3f> vertices;
-  vector<vec3i> indices;
-  vector<Point> points;
   // Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
   // Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
   // Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
@@ -147,6 +306,10 @@ int main(int ac, char **av) {
   for(const auto& point: points) {
     tree->insertNode(root, point);
   };
+  std::map<Node*, int> addressToIndex;
+  int dfsIndex = 0;
+  treeToDFSArray(root, addressToIndex, dfsIndex);
+  printf("Number of dfsNodes %lu\n",dfsBHNodes.size());
 
   auto tree_build_time_end = chrono::steady_clock::now();
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
@@ -161,123 +324,12 @@ int main(int ac, char **av) {
   // Level order traversal of Barnes Hut Tree to build worlds
   // ##################################################################
 
-  float prevS = gridSize;
-  float nextGridSize = gridSize / 2.0;
-  int level = 0;
-  long int currentNodesPerLevel = 0;
-  int currentIndex = 0;
-  float triangleXLocation = 0;
-  float rayOriginXLocation = 0;
-  int primIDIndex = 1;
-
-  // level order traversal of BarnesHutTree
-  // Create an empty queue for level order traversal
-  queue<Node*> q;
-  
-  LOG("Bulding OWL Scenes");
-  // Enqueue Root and initialize height
-  q.push(root);
   auto scene_build_time_start = chrono::steady_clock::now();
-  while (q.empty() == false) {
-      // Print front of queue and remove it from queue
-      Node* node = q.front();
-      if((node->s != prevS)) {
-        if(currentNodesPerLevel > maxNodesPerLevel) maxNodesPerLevel = currentNodesPerLevel;
-        prevS = node->s;
-        gridSize = node->s;
-        nextGridSize = gridSize / 2.0;
-        level += 1;
-        nodesPerLevel.push_back(currentNodesPerLevel);
-        currentNodesPerLevel = 0;
-        triangleXLocation = 0.0f;
-        rayOriginXLocation = 0.0f;
-      } 
-
-      if(node->s == gridSize) {
-        if(node->mass != 0.0f) {
-          if(node->ne == nullptr) {
-            node->isLeaf = true;
-          } else {
-            node->isLeaf = false;
-          }
-          // add triangle to scene corresponding to barnes hut node
-          triangleXLocation += gridSize;
-          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.0f + level, -0.5f});
-          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), -0.5f + level, 0.5f});
-          vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.5f + level, 0.5f});
-          indices.push_back(vec3i{currentIndex, currentIndex+1, currentIndex+2});
-          currentIndex += 3;
-
-          // add device bhNode to vector array
-          deviceBhNode currentBhNode;
-          int indexToInsertAt = 0;
-          currentBhNode.mass = node->mass;
-          currentBhNode.s = node->s;
-          currentBhNode.centerOfMassX = node->centerOfMassX;
-          currentBhNode.centerOfMassY = node->centerOfMassY;
-          if(node->nw && node->nw->mass != 0.0f) {
-            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
-            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
-            rayOriginXLocation += nextGridSize;
-            indexToInsertAt++;
-            primIDIndex++;
-          }
-          if(node->ne && node->ne->mass != 0.0f) {
-            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
-            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
-            rayOriginXLocation += nextGridSize;
-            indexToInsertAt++;
-            primIDIndex++;
-          }
-          if(node->sw && node->sw->mass != 0.0f) {
-            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
-            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
-            rayOriginXLocation += nextGridSize;
-            indexToInsertAt++;
-            primIDIndex++;
-          }
-          if(node->se && node->se->mass != 0.0f) {
-            currentBhNode.children[indexToInsertAt] = vec3f(static_cast<float>(rayOriginXLocation), 0.0f + level + 1, 0.0f);
-            currentBhNode.primIds[indexToInsertAt] = primIDIndex;
-            rayOriginXLocation += nextGridSize;
-            indexToInsertAt++;
-            primIDIndex++;
-          }
-          currentBhNode.numChildren = indexToInsertAt;
-          deviceBhNodes.push_back(currentBhNode);
-
-          // update counters
-          totalNumNodes++; currentNodesPerLevel++;
-        }
-      }
-      q.pop();
-
-      /* Enqueue left child */
-      if (node->nw != NULL)
-          q.push(node->nw);
-
-      /*Enqueue right child */
-      if (node->ne != NULL)
-          q.push(node->ne);
-      
-      /* Enqueue left child */
-      if (node->sw != NULL)
-          q.push(node->sw);
-
-      /*Enqueue right child */
-      if (node->se != NULL)
-          q.push(node->se);
+  dfsTreeSetup(root);
+  for(int i = 0; i < deviceBhNodes.size(); i++) {
+    //printf("deviceBhNodes index: %d | nextPrimId %d\n", i, deviceBhNodes[i].nextPrimId);
   }
-  
-  // last level of BH tree check gets missed so this is to account for it
-  nodesPerLevel.push_back(currentNodesPerLevel);
-  if(currentNodesPerLevel > maxNodesPerLevel) maxNodesPerLevel = currentNodesPerLevel;
-
-  printf("Max nodes per level = %lu\n", maxNodesPerLevel);
-
-  for(int i = 0; i < nodesPerLevel.size(); i++) {
-    printf("Level %d -- %lu nodes\n", i, nodesPerLevel[i]);
-  }
+  installAutoRopes(root, addressToIndex);
 
   OWLBuffer deviceBhNodesBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),
@@ -342,7 +394,7 @@ int main(int ac, char **av) {
     {"nodesPerLevel", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, nodesPerLevel)},
     {"deviceBhNodes", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, deviceBhNodes)},
     {"devicePoints", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, devicePoints)},
-    {"level", OWL_INT, OWL_OFFSETOF(MyGlobals, level)},
+    {"numPrims", OWL_INT, OWL_OFFSETOF(MyGlobals, numPrims)},
     {"computedForces", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, computedForces)},
     {"raysToLaunch", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, raysToLaunch)},
     {"rayObjectsToLaunch", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, rayObjectsToLaunch)},
@@ -376,6 +428,8 @@ int main(int ac, char **av) {
   OWLBuffer NextLevelRaysToLaunchBuffer = owlManagedMemoryBufferCreate( 
      context, OWL_USER_TYPE(CustomRay), numberOfRaysToLaunch, nullptr);
   owlParamsSetBuffer(lp, "rayObjectsToLaunch", NextLevelRaysToLaunchBuffer);
+
+  owlParamsSet1i(lp, "numPrims", deviceBhNodes.size());
   
 
   // -------------------------------------------------------
@@ -417,8 +471,8 @@ int main(int ac, char **av) {
   // Start Ray Tracing Parallel launch
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
-  for(int i = 0; i < nodesPerLevel.size(); i++) {
-    owlParamsSet1i(lp, "level", i);
+  for(int i = 0; i < 1; i++) {
+    //owlParamsSet1i(lp, "level", i);
     //owlBufferUpload(RaysToLaunchBuffer, &raysToLaunchInit, 0, 1);
     owlLaunch2D(rayGen, NUM_POINTS, 1, lp);
     const CustomRay *raysToLaunchOutput = (const CustomRay *)owlBufferGetPointer(NextLevelRaysToLaunchBuffer,0);
@@ -438,18 +492,21 @@ int main(int ac, char **av) {
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
 
-  // for(int i = 0; i < NUM_POINTS; i++) {
-  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-  //   if(percent_error > .5f) {
-  //     LOG_OK("++++++++++++++++++++++++");
-  //     LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
-  //     LOG_OK("++++++++++++++++++++++++");
-  //     printf("RT force = %f\n", rtComputedForces[i]);
-  //     printf("CPU force = %f\n", cpuComputedForces[i]);
-  //     LOG_OK("++++++++++++++++++++++++");
-  //     printf("\n");
-  //   }
-  // }
+  int pointsFailing = 0;
+  for(int i = 0; i < NUM_POINTS; i++) {
+    float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+    if(percent_error > 5.0f) {
+      LOG_OK("++++++++++++++++++++++++");
+      LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+      LOG_OK("++++++++++++++++++++++++");
+      printf("RT force = %f\n", rtComputedForces[i]);
+      printf("CPU force = %f\n", cpuComputedForces[i]);
+      LOG_OK("++++++++++++++++++++++++");
+      printf("\n");
+      pointsFailing++;
+    }
+  }
+  printf("Points failing percent error: %d\n", pointsFailing);
 
   // ##################################################################
   // and finally, clean up
@@ -464,11 +521,10 @@ int main(int ac, char **av) {
   // Print Statistics
   printf("--------------------------------------------------------------\n");
   std::cout << "Tree build time: " << profileStats->treeBuildTime.count() / 1000000.0 << " seconds." << std::endl;
-  std::cout << "Tree Paths Recursive build time: " << profileStats->treePathsRecrusiveSetupTime.count() / 1000000.0 << " seconds." << std::endl;
-  std::cout << "Tree Paths Iterative build time: " << profileStats->treePathsIterativeSetupTime.count() / 1000000.0 << " seconds." << std::endl;
+  //std::cout << "Tree Paths Recursive build time: " << profileStats->treePathsRecrusiveSetupTime.count() / 1000000.0 << " seconds." << std::endl;
+  //std::cout << "Tree Paths Iterative build time: " << profileStats->treePathsIterativeSetupTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Scene build time: " << profileStats->sceneBuildTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Intersections setup time: " << profileStats->intersectionsSetupTime.count() / 1000000.0 << " seconds." << std::endl;
-  std::cout << "Intersections time: " << profileStats->intersectionsTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "RT Cores Force Calculations time: " << profileStats->forceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "CPU Force Calculations time: " << profileStats->cpuForceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Total Program time: " << profileStats->totalProgramTime.count() / 1000000.0 << " seconds." << std::endl;
