@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 1000000;
+constexpr int NUM_POINTS = 100000;
 
 using namespace owl;
 using namespace std;
@@ -36,6 +36,15 @@ using namespace std;
     vec3f autoRopeRayLocation;
     int autoRopePrimId;
     uint8_t isLeaf;
+  };
+
+  struct IntersectionResult {
+    int index;
+    int primID;
+    float mass;
+    float rayLength;
+
+    IntersectionResult() : index(0), primID(0), mass(0), rayLength(0){}
   };
 
   /* variables for the triangle mesh geometry */

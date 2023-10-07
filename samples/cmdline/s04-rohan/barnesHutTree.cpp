@@ -6,7 +6,7 @@
 
 using namespace owl;
 
-Node::Node(float x, float y, float s) : quadrantX(x), quadrantY(y), mass(0), s(s), centerOfMassX(0), centerOfMassY(0), numPoints(0), nw(nullptr), ne(nullptr), sw(nullptr), se(nullptr) {}
+Node::Node(float x, float y, float s) : quadrantX(x), quadrantY(y), mass(0), s(s), centerOfMassX(0), centerOfMassY(0), nw(nullptr), ne(nullptr), sw(nullptr), se(nullptr) {}
 
 BarnesHutTree::BarnesHutTree(float theta, float gridSize) : root(nullptr), theta(theta), gridSize(gridSize) {}
 
@@ -129,7 +129,8 @@ float computeObjectsAttractionForce(Point point, Node *bhNode) {
 float force_on(Point point, Node* node) {
   if(node->nw == nullptr) {
     //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
-    if(point.x != node->centerOfMassX && point.y != node->centerOfMassY) {
+    if((node->mass != 0.0f) && ((point.x != node->centerOfMassX) || (point.y != node->centerOfMassY))) {
+      if(point.idX == 82705) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
       return computeObjectsAttractionForce(point, node);
     } else {
       return 0;
@@ -137,6 +138,8 @@ float force_on(Point point, Node* node) {
   }
 
   if(node->s < distanceBetweenObjects(point, node) * THRESHOLD) {
+    //if(point.idX == 0) printf("Approximate")
+    if(point.idX == 82705) printf("Approximated at node with mass! ->%f\n", node->mass);
     return computeObjectsAttractionForce(point, node);
   }
 

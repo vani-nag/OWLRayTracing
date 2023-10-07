@@ -79,6 +79,7 @@ int totalNumNodes = 0;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
+//vector<IntersectionResult> intersectionResults;
 
 vector<vec3f> vertices;
 vector<vec3i> indices;
@@ -116,7 +117,7 @@ void dfsTreeSetup(Node *root) {
         }
         // add triangle to scene corresponding to barnes hut node
         triangleXLocation += node->s;
-        //printf("Triangle Location %f\n", triangleXLocation);
+        //printf("Triangle Location: %f, PrimID :%d\n", triangleXLocation, primIDIndex-1);
         vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.0f + level, -0.5f});
         vertices.push_back(vec3f{static_cast<float>(triangleXLocation), -0.5f + level, 0.5f});
         vertices.push_back(vec3f{static_cast<float>(triangleXLocation), 0.5f + level, 0.5f});
@@ -254,11 +255,16 @@ int main(int ac, char **av) {
   // ##################################################################
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
-  // Point p0 = {.x = -.773f, .y = 2.991f, .mass = 12.213f, .idX=0};
-  // Point p1 = {.x = -3.599f, .y = -2.265, .mass = 17.859f, .idX=1};
-  // Point p2 = {.x = -4.861f, .y = -1.514f, .mass = 3.244f, .idX=2};
-  // Point p3 = {.x = -3.662f, .y = 2.338f, .mass = 13.3419f, .idX=3};
-  // Point p4 = {.x = -2.097f, .y = 2.779f, .mass = 19.808f, .idX=4};
+  // Point p0 = {.x = -3.0f, .y = 2.991f, .mass = 12.213f, .idX=0};
+  // Point p1 = {.x = -3.0f, .y = -2.265, .mass = 17.859f, .idX=1};
+  // Point p2 = {.x = -4.0f, .y = -1.514f, .mass = 3.244f, .idX=2};
+  // Point p3 = {.x = -3.0f, .y = 2.338f, .mass = 13.3419f, .idX=3};
+  // Point p4 = {.x = -2.0f, .y = 2.779f, .mass = 19.808f, .idX=4};
+  // outFile.write(reinterpret_cast<char*>(&p0), sizeof(Point));
+  // outFile.write(reinterpret_cast<char*>(&p1), sizeof(Point));
+  // outFile.write(reinterpret_cast<char*>(&p2), sizeof(Point));
+  // outFile.write(reinterpret_cast<char*>(&p3), sizeof(Point));
+  // outFile.write(reinterpret_cast<char*>(&p4), sizeof(Point));
   // points.push_back(p0);
   // points.push_back(p1);
   // points.push_back(p2);
@@ -279,19 +285,44 @@ int main(int ac, char **av) {
   // primaryLaunchRays[4].pointID = 4;
   // primaryLaunchRays[4].primID = 0;
   // primaryLaunchRays[4].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // std::ofstream outFile("/home/shay/a/rgangar/RTX/OWLRayTracing/points.dat", std::ios::binary);
+  // if (!outFile) {
+  //   std::cerr << "Error opening file for writing." << std::endl;
+  //   return 1;
+  // }
+  // for (int i = 0; i < NUM_POINTS; ++i) {
+  //   Point p;
+  //   p.x = dis(gen);
+  //   p.y = dis(gen);
+  //   p.mass = disMass(gen);
+  //   p.idX = i;
+  //   outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
+  //   points.push_back(p);
+  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  //   primaryLaunchRays[i].pointID = i;
+  //   primaryLaunchRays[i].primID = 0;
+  //   primaryLaunchRays[i].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  // }
+  // outFile.close();
 
-  for (int i = 0; i < NUM_POINTS; ++i) {
-    Point p;
-    p.x = dis(gen);
-    p.y = dis(gen);
-    p.mass = disMass(gen);
-    p.idX = i;
-    points.push_back(p);
-    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-    primaryLaunchRays[i].pointID = i;
-    primaryLaunchRays[i].primID = 0;
-    primaryLaunchRays[i].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  std::ifstream inFile("/home/shay/a/rgangar/RTX/OWLRayTracing/points.dat", std::ios::binary);
+  if (!inFile) {
+      std::cerr << "Error opening file for reading." << std::endl;
+      return 1;
   }
+
+  Point point;
+  int launchIndex = 0;
+  while (inFile.read(reinterpret_cast<char*>(&point), sizeof(Point))) {
+      // Process each read point as needed
+    points.push_back(point);
+    if(point.idX == 82705) std::cout << "x: " << point.x << ", y: " << point.y << ", mass: " << point.mass << ", idX: " << point.idX << std::endl;
+    primaryLaunchRays[launchIndex].pointID = launchIndex;
+    primaryLaunchRays[launchIndex].primID = 0;
+    primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+    launchIndex++;
+  }
+  inFile.close();
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
@@ -418,10 +449,15 @@ int main(int ac, char **av) {
      context, OWL_FLOAT, NUM_POINTS, nullptr);
   owlParamsSetBuffer(lp, "computedForces", ComputedForcesBuffer);
 
+  // OWLBuffer IntersectionsResults = owlManagedMemoryBufferCreate(
+  //   context,  OWL_USER_TYPE(intersectionResults[0]), 250, &intersectionResults);
+
   int raysToLaunchInit = 0;
   OWLBuffer RaysToLaunchBuffer = owlManagedMemoryBufferCreate( 
      context, OWL_INT, 1, &raysToLaunchInit);
   owlParamsSetBuffer(lp, "raysToLaunch", RaysToLaunchBuffer);
+
+
 
   //printf("Size of custom ray is %lu\n", sizeof(CustomRay));
   u_int numberOfRaysToLaunch = RAYS_ARRAY_SIZE / sizeof(CustomRay);

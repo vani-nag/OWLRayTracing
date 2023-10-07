@@ -24,8 +24,8 @@ namespace owl {
     float quadrantY;
     float mass;
     float s;
-    uint8_t numPoints;
-    int pointsIdx[MAX_POINTS_PER_LEAF];
+    // uint8_t numPoints;
+    // int pointsIdx[MAX_POINTS_PER_LEAF];
     float centerOfMassX;
     float centerOfMassY;
     Node* nw;

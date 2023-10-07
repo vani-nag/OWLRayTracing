@@ -57,19 +57,19 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   Point point = optixLaunchParams.devicePoints[prd.pointID];
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[primID];
 
+  //if(prd.pointID == 0) printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
   optixLaunchParams.computedForces[prd.pointID] += (((point.mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
   CustomRay rayObject;
   rayObject.primID = bhNode.autoRopePrimId;
   rayObject.orgin = bhNode.autoRopeRayLocation;
   rayObject.pointID = prd.pointID;
   prd.rayToLaunch = rayObject;
-
-  // if(prd.pointID == 0) {
-  // printf("%sIntersected yay!%s\n",
-  //          OWL_TERMINAL_GREEN,
-  //          OWL_TERMINAL_DEFAULT);
-  // printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
-  // }
+  if(prd.pointID == 82705) {
+  printf("%sIntersected yay!%s\n",
+           OWL_TERMINAL_GREEN,
+           OWL_TERMINAL_DEFAULT);
+  printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
+  }
 }
 
 OPTIX_MISS_PROGRAM(miss)()
@@ -84,10 +84,11 @@ OPTIX_MISS_PROGRAM(miss)()
   
   if(bhNode.isLeaf == 1) {
     optixLaunchParams.computedForces[prd.pointID] += (((optixLaunchParams.devicePoints[prd.pointID].mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
-    // if(prd.pointID == 0) {
-    // printf("%sHit leaf in miss yay!%s\n",
-    //        OWL_TERMINAL_GREEN,
-    //        OWL_TERMINAL_DEFAULT); }
+    if(prd.pointID == 82705) printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
+    if(prd.pointID == 82705) {
+    printf("%sHit leaf in miss yay!%s\n",
+           OWL_TERMINAL_GREEN,
+           OWL_TERMINAL_DEFAULT); }
   } else {
     //printf("PrimID: %d\n", prd.primID);
   }
@@ -123,8 +124,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   prd.rayEnd = 0;
   //prd.insertIndex = 0;
   float rayLength = sqrtf(prd.r_2) * 0.5f;
-  // if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
-  // if(prd.pointID == 0) printf("Index: %d | PrimID: %d | rayLength: %f\n", 0, prd.primID, rayLength);
+  //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
+  if(prd.pointID == 82705) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
   // Launch rays
   int index = 0;
@@ -155,10 +156,10 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
       prd.rayEnd = 1;
     }
     index++;
-    // if(prd.pointID == 0) {
-    //   printf("Index: %d | PrimID: %d | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, rayLength, ray.origin.x, ray.origin.y);
-    //   //printf("insertIndex: %d\n", prd.insertIndex);
-    // }
+    if(prd.pointID == 82705) {
+      printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
+      //printf("insertIndex: %d\n", prd.insertIndex);
+    }
   }
 }
 
