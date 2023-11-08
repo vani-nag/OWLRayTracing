@@ -9,6 +9,7 @@ In this repository, we implemented a clustering application (DBSCAN) and k-Neare
 RT-DBSCAN offloads distance computations in DBSCAN to the ray tracing cores and performs other clustering operations in shader cores. The implementation and execution instructions are in the [RT-DBSCAN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/cmdline/s05-rtow) directory.
 
 ### TrueKNN 
+TrueKNN removes the fixed-radius constraint in existing translations of Nearest Neighbor queries to Ray Tracing queries. The implementation and execution instructions are in the [TrueKNN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/cmdline/s06-rtow-mixedGeometries) directory.
 
 # OWL: A Node Graph "Wrapper" Library for OptiX 7
 ## What is OWL?
