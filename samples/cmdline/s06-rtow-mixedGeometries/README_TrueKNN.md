@@ -1,4 +1,4 @@
-#TrueKNN: RT-Accelerated k-Nearest Neighbor Search
+# TrueKNN: RT-Accelerated k-Nearest Neighbor Search
 To run TrueKNN, use the following command:
 ```
 make sample06-rtow-mixedGeometries
