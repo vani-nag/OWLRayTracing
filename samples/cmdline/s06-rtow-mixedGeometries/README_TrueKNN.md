@@ -15,8 +15,8 @@ where
 - output file: file to write execution time 
 
 ### Random Sampling For Start Radius
-[random_sample.py](owl/samples/cmdline/s01-simpleTriangles/testing/random_sample.py)
-This is the first file to run to get the start radius.
+Run [random_sample.py](owl/samples/cmdline/s01-simpleTriangles/testing/random_sample.py) to get the start radius:
+`python random_sample.py`
 Change the file path and number of points to read in Line 4.
 We need to use `Min distance = ` displayed in the output as start radius
 
