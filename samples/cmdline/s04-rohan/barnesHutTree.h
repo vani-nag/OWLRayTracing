@@ -9,6 +9,8 @@
 #define GRAVITATIONAL_CONSTANT .0001f
 #define MAX_POINTS_PER_LEAF 32
 
+using namespace std;
+
 namespace owl {
 
   struct Point {

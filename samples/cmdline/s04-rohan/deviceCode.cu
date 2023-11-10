@@ -59,17 +59,23 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 
   //if(prd.pointID == 0) printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
   optixLaunchParams.computedForces[prd.pointID] += (((point.mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
+  // if(prd.pointID == 8124) {
+  //     prd.result.didIntersect = 1;
+  //     prd.result.isLeaf = 0;
+  //     optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
+  //   }
   CustomRay rayObject;
   rayObject.primID = bhNode.autoRopePrimId;
   rayObject.orgin = bhNode.autoRopeRayLocation;
   rayObject.pointID = prd.pointID;
   prd.rayToLaunch = rayObject;
-  if(prd.pointID == 82705) {
-  printf("%sIntersected yay!%s\n",
-           OWL_TERMINAL_GREEN,
-           OWL_TERMINAL_DEFAULT);
-  printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
-  }
+  //if(prd.pointID == 8124) printf("Approximated at node with mass! ->%f\n", bhNode.mass);
+  // if(prd.pointID == 8124) {
+  // printf("%sIntersected yay!%s\n",
+  //          OWL_TERMINAL_GREEN,
+  //          OWL_TERMINAL_DEFAULT);
+  // // printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
+  // }
 }
 
 OPTIX_MISS_PROGRAM(miss)()
@@ -84,12 +90,23 @@ OPTIX_MISS_PROGRAM(miss)()
   
   if(bhNode.isLeaf == 1) {
     optixLaunchParams.computedForces[prd.pointID] += (((optixLaunchParams.devicePoints[prd.pointID].mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
-    if(prd.pointID == 82705) printf("Current rtComputedForce: %f\n", optixLaunchParams.computedForces[prd.pointID]);
-    if(prd.pointID == 82705) {
-    printf("%sHit leaf in miss yay!%s\n",
-           OWL_TERMINAL_GREEN,
-           OWL_TERMINAL_DEFAULT); }
+    if(prd.pointID == 8124) {
+      prd.result.didIntersect = 0;
+      prd.result.isLeaf = 1;
+      optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
+    }
+    //if(prd.pointID == 8124) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
+    // if(prd.pointID == 8124) {
+    // printf("%sHit leaf in miss yay!%s\n",
+    //        OWL_TERMINAL_GREEN,
+    //        OWL_TERMINAL_DEFAULT); }
   } else {
+    if(prd.pointID == 8124) {
+      prd.result.didIntersect = 0;
+      prd.result.isLeaf = 0;
+      optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
+      //printf("insertIndex: %d\n", prd.result.index);
+    }
     //printf("PrimID: %d\n", prd.primID);
   }
   CustomRay rayObject;
@@ -125,10 +142,12 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   //prd.insertIndex = 0;
   float rayLength = sqrtf(prd.r_2) * 0.5f;
   //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
-  if(prd.pointID == 82705) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
+  //if(prd.pointID == 8124) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
   // Launch rays
   int index = 0;
+  prd.index = index;
+  prd.rayLength = rayLength;
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
   while(prd.rayEnd == 0) {
     if(rayLength != 0.0f) {
@@ -156,9 +175,20 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
       prd.rayEnd = 1;
     }
     index++;
-    if(prd.pointID == 82705) {
-      printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
-      //printf("insertIndex: %d\n", prd.insertIndex);
+    prd.index = index;
+    prd.rayLength = rayLength;
+    if(prd.pointID == 8124) {
+      IntersectionResult result;
+      result.index = index;
+      result.primID = prd.primID;
+      result.mass = bhNode.mass;
+      result.rayLength = rayLength;
+      //result.didIntersect = 1;
+      prd.result = result;
+      //optixLaunchParams.intersectionResults[prd.index] = result;
+    }
+    if(prd.pointID == 8124) {
+      //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
     }
   }
 }

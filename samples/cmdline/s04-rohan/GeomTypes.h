@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 100000;
+constexpr int NUM_POINTS = 10000000;
 
 using namespace owl;
 using namespace std;
@@ -43,8 +43,10 @@ using namespace std;
     int primID;
     float mass;
     float rayLength;
+    uint8_t didIntersect;
+    uint8_t isLeaf;
 
-    IntersectionResult() : index(0), primID(0), mass(0), rayLength(0){}
+    //IntersectionResult() : index(0), primID(0), mass(0), rayLength(0), didIntersect(0) {}
   };
 
   /* variables for the triangle mesh geometry */
@@ -88,6 +90,9 @@ using namespace std;
     int primID;
     CustomRay rayToLaunch;
     uint8_t rayEnd;
+    int index;
+    float rayLength;
+    IntersectionResult result;
     //CustomRay rays[50];
     //uint8_t nextChildIndex[50];
     //int insertIndex; 
@@ -102,6 +107,7 @@ using namespace std;
     float *computedForces;
     int *raysToLaunch;
     CustomRay *rayObjectsToLaunch;
+    IntersectionResult *intersectionResults;
 	};
 
   struct ProfileStatistics {

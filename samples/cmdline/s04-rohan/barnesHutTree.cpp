@@ -122,15 +122,17 @@ float computeObjectsAttractionForce(Point point, Node *bhNode) {
   float dx = point.x - bhNode->centerOfMassX;
   float dy = point.y - bhNode->centerOfMassY;
   float r_2 = (dx * dx) + (dy * dy);
+  float result = (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 
-  return (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
+  //if(point.idX == 8124) printf("Distance is ->%.9f\n", result);
+  return result;
 }
  
 float force_on(Point point, Node* node) {
   if(node->nw == nullptr) {
     //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
     if((node->mass != 0.0f) && ((point.x != node->centerOfMassX) || (point.y != node->centerOfMassY))) {
-      if(point.idX == 82705) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
+      //if(point.idX == 8124) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
       return computeObjectsAttractionForce(point, node);
     } else {
       return 0;
@@ -139,7 +141,7 @@ float force_on(Point point, Node* node) {
 
   if(node->s < distanceBetweenObjects(point, node) * THRESHOLD) {
     //if(point.idX == 0) printf("Approximate")
-    if(point.idX == 82705) printf("Approximated at node with mass! ->%f\n", node->mass);
+   //if(point.idX == 8124) printf("Approximated at node with mass! ->%f\n", node->mass);
     return computeObjectsAttractionForce(point, node);
   }
 
