@@ -132,7 +132,7 @@ float force_on(Point point, Node* node) {
   if(node->nw == nullptr) {
     //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
     if((node->mass != 0.0f) && ((point.x != node->centerOfMassX) || (point.y != node->centerOfMassY))) {
-      //if(point.idX == 8124) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
+      //if(point.idX == 5382) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
       return computeObjectsAttractionForce(point, node);
     } else {
       return 0;
@@ -141,7 +141,7 @@ float force_on(Point point, Node* node) {
 
   if(node->s < distanceBetweenObjects(point, node) * THRESHOLD) {
     //if(point.idX == 0) printf("Approximate")
-   //if(point.idX == 8124) printf("Approximated at node with mass! ->%f\n", node->mass);
+    //if(point.idX == 5382) printf("Approximated at node with mass! ->%f\n", node->mass);
     return computeObjectsAttractionForce(point, node);
   }
 

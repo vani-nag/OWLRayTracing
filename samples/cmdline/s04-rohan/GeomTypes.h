@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 10000000;
+constexpr int NUM_POINTS = 20000000;
 
 using namespace owl;
 using namespace std;
@@ -92,7 +92,6 @@ using namespace std;
     uint8_t rayEnd;
     int index;
     float rayLength;
-    IntersectionResult result;
     //CustomRay rays[50];
     //uint8_t nextChildIndex[50];
     //int insertIndex; 
@@ -100,14 +99,10 @@ using namespace std;
 
 	struct MyGlobals 
 	{	
-    long int *nodesPerLevel;
     deviceBhNode *deviceBhNodes;
     Point *devicePoints;
     int numPrims;
     float *computedForces;
-    int *raysToLaunch;
-    CustomRay *rayObjectsToLaunch;
-    IntersectionResult *intersectionResults;
 	};
 
   struct ProfileStatistics {

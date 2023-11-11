@@ -27,25 +27,6 @@ __constant__ MyGlobals optixLaunchParams;
 ////////////////////////////////////////////////////////////////CODE BEGINS//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-__device__ inline char getBitAtPositionInBitmap(char *bitmap, unsigned long position) {
-  unsigned long bytePosition = position / 8;
-  unsigned long bitPosition = position % 8;
-
-  //int byte = bitmap[bytePosition];
-  char bit = (bitmap[bytePosition] >> bitPosition) & 1;
-  return bit;
-}
-
-__device__ inline u_int deviceSetBitAtPositionInBitmap(u_int *bitmap, unsigned long position, u_int value) {
-  unsigned long bytePosition = position / 32;
-  unsigned long bitPosition = position % 32;
-
-  u_int *bytePtr = &bitmap[bytePosition];
-  u_int bitToSet = (value << bitPosition);
-
-  return atomicOr(bytePtr, bitToSet);
-}
-
 OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 {
   const TrianglesGeomData &self = owl::getProgramData<TrianglesGeomData>();
@@ -69,7 +50,7 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   rayObject.orgin = bhNode.autoRopeRayLocation;
   rayObject.pointID = prd.pointID;
   prd.rayToLaunch = rayObject;
-  //if(prd.pointID == 8124) printf("Approximated at node with mass! ->%f\n", bhNode.mass);
+  //if(prd.pointID == 5382) printf("Approximated at node with mass! ->%f\n", bhNode.mass);
   // if(prd.pointID == 8124) {
   // printf("%sIntersected yay!%s\n",
   //          OWL_TERMINAL_GREEN,
@@ -90,23 +71,23 @@ OPTIX_MISS_PROGRAM(miss)()
   
   if(bhNode.isLeaf == 1) {
     optixLaunchParams.computedForces[prd.pointID] += (((optixLaunchParams.devicePoints[prd.pointID].mass * bhNode.mass)) / prd.r_2) * GRAVITATIONAL_CONSTANT;
-    if(prd.pointID == 8124) {
-      prd.result.didIntersect = 0;
-      prd.result.isLeaf = 1;
-      optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
-    }
-    //if(prd.pointID == 8124) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
+    // if(prd.pointID == 8124) {
+    //   prd.result.didIntersect = 0;
+    //   prd.result.isLeaf = 1;
+    //   optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
+    // }
+  //if(prd.pointID == 5382) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
     // if(prd.pointID == 8124) {
     // printf("%sHit leaf in miss yay!%s\n",
     //        OWL_TERMINAL_GREEN,
     //        OWL_TERMINAL_DEFAULT); }
   } else {
-    if(prd.pointID == 8124) {
-      prd.result.didIntersect = 0;
-      prd.result.isLeaf = 0;
-      optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
-      //printf("insertIndex: %d\n", prd.result.index);
-    }
+    // if(prd.pointID == 8124) {
+    //   prd.result.didIntersect = 0;
+    //   prd.result.isLeaf = 0;
+    //   optixLaunchParams.intersectionResults[prd.result.index] = prd.result;
+    //   //printf("insertIndex: %d\n", prd.result.index);
+    // }
     //printf("PrimID: %d\n", prd.primID);
   }
   CustomRay rayObject;
@@ -142,7 +123,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   //prd.insertIndex = 0;
   float rayLength = sqrtf(prd.r_2) * 0.5f;
   //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
-  //if(prd.pointID == 8124) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
+  //if(prd.pointID == 5382) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
   // Launch rays
   int index = 0;
@@ -167,7 +148,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     dy = point.y - bhNode.centerOfMassY;
     prd.r_2 = (dx * dx) + (dy * dy);
     prd.primID = currentRay.primID;
-    rayLength = sqrtf(prd.r_2) * 0.5f;
+    rayLength = sqrtf(prd.r_2) * 0.5;
 
     ray.origin = currentRay.orgin;
     ray.tmax = rayLength;
@@ -177,19 +158,19 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     index++;
     prd.index = index;
     prd.rayLength = rayLength;
-    if(prd.pointID == 8124) {
-      IntersectionResult result;
-      result.index = index;
-      result.primID = prd.primID;
-      result.mass = bhNode.mass;
-      result.rayLength = rayLength;
-      //result.didIntersect = 1;
-      prd.result = result;
-      //optixLaunchParams.intersectionResults[prd.index] = result;
-    }
-    if(prd.pointID == 8124) {
-      //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
-    }
+    // if(prd.pointID == 8124) {
+    //   IntersectionResult result;
+    //   result.index = index;
+    //   result.primID = prd.primID;
+    //   result.mass = bhNode.mass;
+    //   result.rayLength = rayLength;
+    //   //result.didIntersect = 1;
+    //   prd.result = result;
+    //   //optixLaunchParams.intersectionResults[prd.index] = result;
+    // }
+    // if(prd.pointID == 5382) {
+    //   //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
+    // }
   }
 }
 

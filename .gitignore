@@ -36,4 +36,6 @@ Session.vim
 !*png/*.pdf
 .vs/
 samples/advanced/optix7course/models/
+points_fix.dat
+points_large.dat
 
