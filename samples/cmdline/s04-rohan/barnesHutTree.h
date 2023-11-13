@@ -16,6 +16,10 @@ namespace owl {
   struct Point {
     float x;
     float y;
+    float z;
+    float vel_x;
+    float vel_y;
+    float vel_z;
     float mass;
     int idX;
   };

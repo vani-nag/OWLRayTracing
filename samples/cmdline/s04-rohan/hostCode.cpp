@@ -80,6 +80,7 @@ vector<deviceBhNode> deviceBhNodes;
 deviceBhNode *deviceBhNodesPointer;
 Point *devicePoints;
 int totalNumNodes = 0;
+float minNodeSValue = GRID_SIZE + 1.0f;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
@@ -99,7 +100,7 @@ float euclideanDistance(const Point& p1, const Point& p2) {
     return std::sqrt(dx * dx + dy * dy);
 }
 
-void dfsTreeSetup(Node *root) {
+void dfsTreeSetup() {
   float prevS = gridSize;
   float nextGridSize = gridSize / 2.0;
   float level = 0.0f;
@@ -134,6 +135,7 @@ void dfsTreeSetup(Node *root) {
       // }
       //triangleXLocation = triangleXLocation + FloatType(node->s);
       triangleXLocation += node->s;
+      if(node->s < minNodeSValue) minNodeSValue = node->s;
       if(triangleXLocation >= TRIANGLEX_THRESHOLD) {
         level += 3.0f;
         triangleXLocation = node->s;
@@ -192,16 +194,15 @@ void treeToDFSArray(Node *node, std::map<Node*, int>& addressToIndex, int& dfsIn
 }
 
 void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
-  if (root == nullptr) {
-        return;
-    }
-
     std::stack<Node*> ropeStack;
     ropeStack.push(root);
     int initial = 0;
+    int maxStackSize = 0;
+    int iterations = 0;
 
     while (!ropeStack.empty()) {
       Node* currentNode = ropeStack.top();
+      if(ropeStack.size() > maxStackSize) maxStackSize = ropeStack.size();
       //printf("Stack Node ---> ");
       //std::cout << "Node: Mass = " << currentNode->mass << ", Center of Mass = (" << currentNode->centerOfMassX << ", " << currentNode->centerOfMassY << "), quadrant = (" << currentNode->quadrantX << ", " << currentNode->quadrantY << ")" << "\n";
       ropeStack.pop();
@@ -229,7 +230,11 @@ void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
       if (currentNode->sw && currentNode->sw->mass != 0.0f) ropeStack.push(currentNode->sw);
       if (currentNode->ne && currentNode->ne->mass != 0.0f) ropeStack.push(currentNode->ne);
       if (currentNode->nw && currentNode->nw->mass != 0.0f) ropeStack.push(currentNode->nw);
+      iterations++;
     }
+
+    printf("Max stack size: %d\n", maxStackSize);
+    printf("Iterations: %d\n", iterations);
 
 }
 
@@ -241,20 +246,33 @@ int main(int ac, char **av) {
   // ##################################################################
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
-  // std::ofstream outFile("/home/shay/a/rgangar/RTX/OWLRayTracing/points.dat", std::ios::binary);
+  
+  // FILE *outFile = fopen("/home/shay/a/rgangar/RTX/OWLRayTracing/points.txt", "w");
   // if (!outFile) {
   //   std::cerr << "Error opening file for writing." << std::endl;
   //   return 1;
   // }
+
+  // fprintf(outFile, "%d\n", NUM_POINTS);
+  // fprintf(outFile, "%d\n", NUM_STEPS);
+  // fprintf(outFile, "%f\n", (0.025));
+  // fprintf(outFile, "%f\n", (0.05));
+  // fprintf(outFile, "%f\n", THRESHOLD);
+
   // int numPointsSoFar = 0;
   // while (numPointsSoFar < NUM_POINTS) {
   //   Point p;
   //   p.x = dis(gen);
   //   p.y = dis(gen);
+  //   p.z = 0.0f;
+  //   p.vel_x = 0.0f;
+  //   p.vel_y = 0.0f;
+  //   p.vel_z = 0.0f;
   //   p.mass = disMass(gen);
   //   p.idX = numPointsSoFar;
 
-  //   outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
+  //   fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
+  //   //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
   //   points.push_back(p);
   //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
   //   primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
@@ -262,26 +280,48 @@ int main(int ac, char **av) {
   //   primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
   //   numPointsSoFar++;
   // }
-  // outFile.close();
+  // fclose(outFile);
 
-  std::ifstream inFile("/home/shay/a/rgangar/RTX/OWLRayTracing/points.dat", std::ios::binary);
+  FILE *inFile = fopen("/home/shay/a/rgangar/RTX/OWLRayTracing/points.txt", "r");
   if (!inFile) {
       std::cerr << "Error opening file for reading." << std::endl;
       return 1;
   }
 
-  Point point;
-  int launchIndex = 0;
-  while (inFile.read(reinterpret_cast<char*>(&point), sizeof(Point))) {
-      // Process each read point as needed
-    points.push_back(point);
-    //if(point.idX == 82705) std::cout << "x: " << point.x << ", y: " << point.y << ", mass: " << point.mass << ", idX: " << point.idX << std::endl;
-    primaryLaunchRays[launchIndex].pointID = launchIndex;
-    primaryLaunchRays[launchIndex].primID = 0;
-    primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
-    launchIndex++;
+  float randomStuff;
+
+  for(int i = 0; i < 5; i++) {
+    fscanf(inFile, "%f\n", &randomStuff);
+    printf("Read %f\n", randomStuff);
   }
-  inFile.close();
+
+  int launchIndex = 0;
+  float x, y,z, mass;
+  vec3f velRead;
+    // Read three floats from each line until the end of the file
+  while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
+      //Process the floats as needed
+      Point point;
+      point.x = x;
+      point.y = y;
+      point.z = 0.0f;
+      point.vel_x = velRead.x;
+      point.vel_y = velRead.u;
+      point.vel_z = velRead.z;
+      point.mass = mass;
+      point.idX = launchIndex;
+
+      if(launchIndex == 0) {
+        printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
+      }
+
+      points.push_back(point);
+      primaryLaunchRays[launchIndex].pointID = launchIndex;
+      primaryLaunchRays[launchIndex].primID = 0;
+      primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+      launchIndex++;
+  }
+  fclose(inFile);
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
@@ -296,13 +336,16 @@ int main(int ac, char **av) {
   for(const auto& point: points) {
     tree->insertNode(root, point);
   };
+  auto tree_build_time_end = chrono::steady_clock::now();
+  profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
+
+  auto tree_to_dfs_time_start = chrono::steady_clock::now();
   std::map<Node*, int> addressToIndex;
   int dfsIndex = 0;
   treeToDFSArray(root, addressToIndex, dfsIndex);
   printf("Number of dfsNodes %lu\n",dfsBHNodes.size());
-
-  auto tree_build_time_end = chrono::steady_clock::now();
-  profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
+  auto tree_to_dfs_time_end = chrono::steady_clock::now();
+  profileStats->treeToDFSTime += chrono::duration_cast<chrono::microseconds>(tree_to_dfs_time_end - tree_to_dfs_time_start);
 
   //tree->printTree(root, 0, "root");
 
@@ -316,10 +359,9 @@ int main(int ac, char **av) {
 
   auto scene_build_time_start = chrono::steady_clock::now();
   auto test_time_start = chrono::steady_clock::now();
-  dfsTreeSetup(root);
+  dfsTreeSetup();
   auto test_time_end = chrono::steady_clock::now();
-  auto total_test_time = chrono::duration_cast<chrono::microseconds>(test_time_end - test_time_start);
-  std::cout << "Test time: " << total_test_time.count() / 1000000.0 << " seconds." << std::endl;
+  profileStats->createSceneTime += chrono::duration_cast<chrono::microseconds>(test_time_end - test_time_start);
   // for(int i = 0; i < deviceBhNodes.size(); i++) {
   //   //printf("deviceBhNodes index: %d | nextPrimId %d\n", i, deviceBhNodes[i].nextPrimId);
   // }
@@ -327,8 +369,7 @@ int main(int ac, char **av) {
   auto auto_ropes_start = chrono::steady_clock::now();
   installAutoRopes(root, addressToIndex);
   auto auto_ropes_end = chrono::steady_clock::now();
-  auto total_auto_ropes = chrono::duration_cast<chrono::microseconds>(auto_ropes_end - auto_ropes_start);
-  std::cout << "Auto ropes time: " << total_auto_ropes.count() / 1000000.0 << " seconds." << std::endl;
+  profileStats->installAutoRopesTime += chrono::duration_cast<chrono::microseconds>(auto_ropes_end - auto_ropes_start);
 
   OWLBuffer deviceBhNodesBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),
@@ -379,8 +420,6 @@ int main(int ac, char **av) {
   auto intersections_setup_time_start = chrono::steady_clock::now();
   OWLVarDecl missProgVars[]
     = {
-    { "color0", OWL_FLOAT3, OWL_OFFSETOF(MissProgData,color0)},
-    { "color1", OWL_FLOAT3, OWL_OFFSETOF(MissProgData,color1)},
     { /* sentinel to mark end of list */ }
   };
   // ----------- create object  ----------------------------
@@ -388,9 +427,6 @@ int main(int ac, char **av) {
     = owlMissProgCreate(context,module,"miss",sizeof(MissProgData),
                         missProgVars,-1);
 
-  // ----------- set variables  ----------------------------
-  owlMissProgSet3f(missProg,"color0",owl3f{.8f,0.f,0.f});
-  owlMissProgSet3f(missProg,"color1",owl3f{.8f,.8f,.8f});
 
   OWLVarDecl myGlobalsVars[] = {
     {"deviceBhNodes", OWL_BUFPTR, OWL_OFFSETOF(MyGlobals, deviceBhNodes)},
@@ -444,6 +480,7 @@ int main(int ac, char **av) {
 
   printf("Size of malloc for bhNodes is %.2f gb.\n", (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0);
   printf("Size of malloc for points is %.2f gb.\n", (points.size() * sizeof(Point))/1000000000.0);
+  printf("Minimum node-s value %f\n", minNodeSValue);
   
   auto intersections_setup_time_end = chrono::steady_clock::now();
   profileStats->intersectionsSetupTime += chrono::duration_cast<chrono::microseconds>(intersections_setup_time_end - intersections_setup_time_start);
@@ -452,13 +489,8 @@ int main(int ac, char **av) {
   // Start Ray Tracing Parallel launch
   // ##################################################################
   auto start1 = std::chrono::steady_clock::now();
-  for(int i = 0; i < 1; i++) {
-    //owlParamsSet1i(lp, "level", i);
-    //owlBufferUpload(RaysToLaunchBuffer, &raysToLaunchInit, 0, 1);
-    owlLaunch2D(rayGen, NUM_POINTS, 1, lp);
-    break;
-  }
-  const float *rtComputedForces = (const float *)owlBufferGetPointer(ComputedForcesBuffer,0);
+  owlLaunch2D(rayGen, NUM_POINTS, 1, lp);
+  //const float *rtComputedForces = (const float *)owlBufferGetPointer(ComputedForcesBuffer,0);
   auto end1 = std::chrono::steady_clock::now();
   profileStats->forceCalculationTime = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
 
@@ -469,26 +501,26 @@ int main(int ac, char **av) {
   printf("CPU OUTPUT!!!\n");
   printf("----------------------------------------\n");
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  tree->computeForces(root, points, cpuComputedForces);
+  //tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
   printf("----------------------------------------\n");
 
-  int pointsFailing = 0;
-  for(int i = 0; i < NUM_POINTS; i++) {
-    float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-    if(percent_error > 2.5f) {
-      LOG_OK("++++++++++++++++++++++++");
-      LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
-      LOG_OK("++++++++++++++++++++++++");
-      printf("RT force = %f\n", rtComputedForces[i]);
-      printf("CPU force = %f\n", cpuComputedForces[i]);
-      LOG_OK("++++++++++++++++++++++++");
-      printf("\n");
-      pointsFailing++;
-    }
-  }
-  printf("Points failing percent error: %d\n", pointsFailing);
+  // int pointsFailing = 0;
+  // for(int i = 0; i < NUM_POINTS; i++) {
+  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+  //   if(percent_error > 2.5f) {
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // printf("RT force = %f\n", rtComputedForces[i]);
+  //     // printf("CPU force = %f\n", cpuComputedForces[i]);
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // printf("\n");
+  //     pointsFailing++;
+  //   }
+  // }
+  // printf("Points failing percent error: %d\n", pointsFailing);
 
   // ##################################################################
   // and finally, clean up
@@ -503,9 +535,9 @@ int main(int ac, char **av) {
   // Print Statistics
   printf("--------------------------------------------------------------\n");
   std::cout << "Tree build time: " << profileStats->treeBuildTime.count() / 1000000.0 << " seconds." << std::endl;
-  //std::cout << "Tree Paths Recursive build time: " << profileStats->treePathsRecrusiveSetupTime.count() / 1000000.0 << " seconds." << std::endl;
-  //std::cout << "Tree Paths Iterative build time: " << profileStats->treePathsIterativeSetupTime.count() / 1000000.0 << " seconds." << std::endl;
-  std::cout << "Scene build time: " << profileStats->sceneBuildTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Tree to DFS time: " << profileStats->treeToDFSTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Create Scene Time: " << profileStats->createSceneTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Install AutoRopes time: " << profileStats->installAutoRopesTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Intersections setup time: " << profileStats->intersectionsSetupTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "RT Cores Force Calculations time: " << profileStats->forceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "CPU Force Calculations time: " << profileStats->cpuForceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;

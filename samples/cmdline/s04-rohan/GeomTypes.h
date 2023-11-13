@@ -21,7 +21,8 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 20000000;
+constexpr int NUM_POINTS = 10000000;
+constexpr int NUM_STEPS = 1;
 
 using namespace owl;
 using namespace std;
@@ -63,10 +64,6 @@ using namespace std;
     vec3f orgin;
     int primID;
     int pointID;
-
-    // Constructor
-    // CustomRay(vec3f org, int prID, int poID) : orgin(org), primID(prID), pointID(poID) {}
-    //CustomRay() : orgin(vec3f(0.0f, 0.0f, 0.0f)), primID(0), pointID(0) {}
   };
 
   /* variables for the ray generation program */
@@ -79,8 +76,6 @@ using namespace std;
   /* variables for the miss program */
   struct MissProgData
   {
-    vec3f  color0;
-    vec3f  color1;
   };
 
   struct PerRayData
@@ -90,11 +85,8 @@ using namespace std;
     int primID;
     CustomRay rayToLaunch;
     uint8_t rayEnd;
-    int index;
     float rayLength;
-    //CustomRay rays[50];
-    //uint8_t nextChildIndex[50];
-    //int insertIndex; 
+    float mass;
   };
 
 	struct MyGlobals 
@@ -110,6 +102,9 @@ using namespace std;
     chrono::microseconds sceneBuildTime;
     chrono::microseconds totalProgramTime;
     chrono::microseconds treeBuildTime;
+    chrono::microseconds treeToDFSTime;
+    chrono::microseconds installAutoRopesTime;
+    chrono::microseconds createSceneTime;
     chrono::microseconds forceCalculationTime;
     chrono::microseconds cpuForceCalculationTime;
     chrono::microseconds intersectionsSetupTime;
