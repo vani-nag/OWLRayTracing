@@ -1,2 +1,0 @@
-g++ -o raytri raytri.cpp -O3 -std=c++11 
-./raytri
