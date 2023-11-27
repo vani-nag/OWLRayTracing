@@ -12,8 +12,8 @@ RT-DBSCAN offloads distance computations in DBSCAN to the ray tracing cores and 
 TrueKNN removes the fixed-radius constraint in existing translations of Nearest Neighbor queries to Ray Tracing queries. The implementation and execution instructions are in the [TrueKNN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/cmdline/s06-rtow-mixedGeometries) directory.
 
 If you find this work to be useful in your research, please cite:
-[1] V. Nagarajan, D. Mandarapu, and M. Kulkarni.  "RT-kNNS Unbound: Using RT Cores to Accelerate Unrestricted Neighbor Search". In Proceedings of the 37th International Conference on Supercomputing (ICS '23). Association for Computing Machinery, New York, NY, USA, 289–300. https://doi.org/10.1145/3577193.3593738
-[2] V. Nagarajan and M. Kulkarni, "RT-DBSCAN: Accelerating DBSCAN using Ray Tracing Hardware," 2023 IEEE International Parallel and Distributed Processing Symposium (IPDPS), St. Petersburg, FL, USA, 2023, pp. 963-973, doi: 10.1109/IPDPS54959.2023.00100.
+1. V. Nagarajan, D. Mandarapu, and M. Kulkarni.  "RT-kNNS Unbound: Using RT Cores to Accelerate Unrestricted Neighbor Search". In Proceedings of the 37th International Conference on Supercomputing (ICS '23). Association for Computing Machinery, New York, NY, USA, 289–300. https://doi.org/10.1145/3577193.3593738
+2. V. Nagarajan and M. Kulkarni, "RT-DBSCAN: Accelerating DBSCAN using Ray Tracing Hardware," 2023 IEEE International Parallel and Distributed Processing Symposium (IPDPS), St. Petersburg, FL, USA, 2023, pp. 963-973, doi: 10.1109/IPDPS54959.2023.00100.
 
 <!--- ------------------------------------------------------- -->
 # Building OWL / Supported Platforms
