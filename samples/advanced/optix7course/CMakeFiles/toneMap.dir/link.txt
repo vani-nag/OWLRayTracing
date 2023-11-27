@@ -1,2 +1,0 @@
-/usr/bin/ar qc ../../../libtoneMap.a  CMakeFiles/toneMap.dir/toneMap_generated_toneMap.cu.o
-/usr/bin/ranlib ../../../libtoneMap.a
