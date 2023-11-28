@@ -14,8 +14,12 @@ make sample06-rtow-mixedGeometries
 - **output file:** File to write execution time 
 
 ### Random Sampling For Start Radius
-Run [random_sample.py](owl/samples/cmdline/s01-simpleTriangles/testing/random_sample.py) to get the start radius:
+Run [random_sample.py](https://github.com/vani-nag/OWLRayTracing/blob/master/samples/s01-trueknn/Util/random_sample.py) to get the start radius:
 `python random_sample.py`
 Change the file path and number of points to read in Line 4.
-We need to use `Min distance = ` displayed in the output as start radius
+Use `Min distance = ` displayed in the output as start radius
+
+### Dataset
+A sample dataset is provided in [Dataset](https://github.com/vani-nag/OWLRayTracing/blob/master/samples/s01-trueknn/Dataset)
+
 
