@@ -75,10 +75,10 @@ argv[6] = file to write execution time
 int main(int ac, char **argv) {
 
   // Read from input .csv file
-	/* Input must be in the format:
-	(x1,y1,z1)
-	(x2,y2,z2)... 
-	*/
+  /* Input must be in the format:
+  (x1,y1,z1)
+  (x2,y2,z2)...
+  */
 
   std::string line;
   std::ifstream myfile;
@@ -88,9 +88,9 @@ int main(int ac, char **argv) {
     exit(EXIT_FAILURE);
   }
   std::vector<float> vect;
-	int dim = atoi(argv[3]);
+  int dim = atoi(argv[3]);
 
-	// Read x,y,z co-ordinates of `count` lines
+  // Read x,y,z co-ordinates of `count` lines
   int count = atoi(argv[2]) * dim;
   while (getline(myfile, line) && count > 0) {
     std::stringstream ss(line);
@@ -107,21 +107,21 @@ int main(int ac, char **argv) {
   // ##################################################################
 
   // Select minPts,k
-  float radius = atof(argv[4]); 
+  float radius = atof(argv[4]);
   int knn = atoi(argv[5]);
   // vec3f org = vec3f(vect.at(0), vect.at(1), vect.at(2));
 
-	//If dataset is 2D, set z dimension to 0 when creating spheres
-	if (dim == 2) {
-		for (int i = 0, j = 0; i < vect.size(); i += 2, j += 1)
-    	Spheres.push_back(Sphere{vec3f(vect.at(i), vect.at(i + 1), 0)});
-	}
+  // If dataset is 2D, set z dimension to 0 when creating spheres
+  if (dim == 2) {
+    for (int i = 0, j = 0; i < vect.size(); i += 2, j += 1)
+      Spheres.push_back(Sphere{vec3f(vect.at(i), vect.at(i + 1), 0)});
+  }
 
-	if (dim == 3) {
-		for (int i = 0, j = 0; i < vect.size(); i += 3, j += 1)
-    	Spheres.push_back(Sphere{vec3f(vect.at(i), vect.at(i + 1), vect.at(i + 2))});
-	}
-  
+  if (dim == 3) {
+    for (int i = 0, j = 0; i < vect.size(); i += 3, j += 1)
+      Spheres.push_back(
+          Sphere{vec3f(vect.at(i), vect.at(i + 1), vect.at(i + 2))});
+  }
 
   // Init neighbors array that maintains list of k nearest neighbors
   for (int j = 0; j < Spheres.size(); j++) {
@@ -282,8 +282,7 @@ int main(int ac, char **argv) {
   auto round_end = std::chrono::steady_clock::now();
   // auto round_elapsed = std::chrono::steady_clock::now();
   ////////////////////////////////////////////////////Call-1////////////////////////////////////////////////////////////////////////////
-  while (!foundKNN) //&& (stop==0 | stop==1))
-  {
+  while (!foundKNN) {
     cout << "\n================================================================"
             "===============================================\nRound: "
          << ++numRounds << " Radius = " << radius << '\n';
@@ -304,21 +303,21 @@ int main(int ac, char **argv) {
     // }
     // std::cout << "POINTS LEFT: " << count
     //           << "\nNUM INTERSECTIONS: " << num_intersections << '\n';
-		*/
+    */
 
     // Determine if we need another round
 
     for (int j = 0; j < Spheres.size(); j++) {
 
-			/* Uncomment to print neighbors
+      /* Uncomment to print neighbors
       // outfile<<"Point "<<j<<": ("<<Spheres.at(j).center.x<<",
-      // "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n"; 
-			// for(int i = 0; i < knn; i++)
+      // "<<Spheres.at(j).center.y<<", "<<Spheres.at(j).center.z<<")\n";
+            // for(int i = 0; i < knn; i++)
       // outfile<<j<<","<<fb[j*knn+i].ind<<','<<fb[j*knn+i].dist<<'\n';
       // cout<<"HOST: numNeighbors["<<j*knn<<"] =
       // "<<fb[j*knn].numNeighbors<<'\n';
-			*/
-		
+      */
+
       if (fb[j * knn].numNeighbors > 0) {
         foundKNN = 0;
         radius *= 2;
