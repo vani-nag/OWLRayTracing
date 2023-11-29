@@ -5,8 +5,8 @@ Though the RT cores were built to accelerate ray tracing applications, we show t
 
 In this repository, we implement a clustering application (DBSCAN) and k-Nearest Neighbor Search application that uses RT acceleration. Please follow the [installation instructions](https://github.com/vani-nag/OWLRayTracing#building-owl--supported-platforms) to install and configure OWL.
 
-### RT-DBSCAN 
-RT-DBSCAN offloads distance computations in DBSCAN to the ray tracing cores and performs other clustering operations in shader cores. The implementation and execution instructions are in the [RT-DBSCAN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/s02-rtdbscan) directory.
+<!-- ### RT-DBSCAN 
+RT-DBSCAN offloads distance computations in DBSCAN to the ray tracing cores and performs other clustering operations in shader cores. The implementation and execution instructions are in the [RT-DBSCAN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/s02-rtdbscan) directory. -->
 
 ### TrueKNN 
 TrueKNN removes the fixed-radius constraint in existing translations of Nearest Neighbor queries to Ray Tracing queries. The implementation and execution instructions are in the [TrueKNN](https://github.com/vani-nag/OWLRayTracing/tree/master/samples/s01-trueknn) directory.
