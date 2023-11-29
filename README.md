@@ -104,7 +104,8 @@ For sample code on how to use this, have a look at the `owl/samples/`
 directory.
 
 <!--- ------------------------------------------------------- -->
+#### Copyright
 &copy; Purdue Research Foundation
 
-#### Copyright
+#### Non-commercial Use License
 [Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
