@@ -3,8 +3,8 @@ TrueKNN computes the *k* nearest neighbors of *every* point in the dataset.
 To run TrueKNN, use the following command:
 ```
 cd build
-make sample06-rtow-mixedGeometries
-./sample06-rtow-mixedGeometries [filename] [number of points] [dimension] [start radius] [k] [output file]
+make sample01-trueknn
+./sample01-trueknn [filename] [number of points] [dimension] [start radius] [k] [output file]
 ```
 - **filename:** .csv file with 2D/3D points
 - **number of inputs (*n*):** Number of points to query from dataset. Always selects first *n* points
