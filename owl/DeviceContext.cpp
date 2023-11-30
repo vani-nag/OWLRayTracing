@@ -271,12 +271,12 @@ namespace owl {
   else {
     std::cout << "WARNING: RUNNING OPTIX PROGRAMS IN -O0 DEBUG MODE!!!" << std::endl;
     moduleCompileOptions.maxRegisterCount  = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT ;
-    moduleCompileOptions.optLevel          = OPTIX_COMPILE_OPTIMIZATION_LEVEL_3;
+    moduleCompileOptions.optLevel          = OPTIX_COMPILE_OPTIMIZATION_LEVEL_0;
 #if OPTIX_VERSION >= 70400
     // 7.4 no longer has 'lineinfo'
-    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MODERATE;
+    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
 #else
-    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MODERATE;
+    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
 #endif
   }
 

@@ -200,7 +200,7 @@ OWL_API void owlBuildSBT(OWLContext _context,
 OWL_API void owlBuildPrograms(OWLContext _context)
 {
   LOG_API_CALL();
-  bool debug = true;
+  bool debug = false;
   checkGet(_context)->buildPrograms(debug);
 }
   
