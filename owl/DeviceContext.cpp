@@ -271,12 +271,12 @@ namespace owl {
   else {
     std::cout << "WARNING: RUNNING OPTIX PROGRAMS IN -O0 DEBUG MODE!!!" << std::endl;
     moduleCompileOptions.maxRegisterCount  = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT ;
-    moduleCompileOptions.optLevel          = OPTIX_COMPILE_OPTIMIZATION_LEVEL_0;
+    moduleCompileOptions.optLevel          = OPTIX_COMPILE_OPTIMIZATION_LEVEL_3;
 #if OPTIX_VERSION >= 70400
     // 7.4 no longer has 'lineinfo'
-    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
+    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MODERATE;
 #else
-    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
+    moduleCompileOptions.debugLevel        = OPTIX_COMPILE_DEBUG_LEVEL_MODERATE;
 #endif
   }
 
@@ -309,7 +309,7 @@ namespace owl {
       break;
     }
     pipelineCompileOptions.usesMotionBlur     = parent->motionBlurEnabled;
-    pipelineCompileOptions.numPayloadValues   = 2;
+    pipelineCompileOptions.numPayloadValues   = 8;
     pipelineCompileOptions.numAttributeValues = parent->numAttributeValues;
     pipelineCompileOptions.exceptionFlags     = OPTIX_EXCEPTION_FLAG_NONE;
     pipelineCompileOptions.pipelineLaunchParamsVariableName = "optixLaunchParams";

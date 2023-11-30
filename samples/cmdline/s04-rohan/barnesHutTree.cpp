@@ -21,6 +21,7 @@ void BarnesHutTree::insertNode(Node* node, const Point& point) {
     node->mass = point.mass;
     node->centerOfMassX = point.x;
     node->centerOfMassY = point.y;
+    node->pointID = point.idX;
     return;
   }
 
@@ -65,20 +66,24 @@ void BarnesHutTree::splitNode(Node* node) {
       node->sw->mass = node->mass;
       node->sw->centerOfMassX = node->centerOfMassX;
       node->sw->centerOfMassY = node->centerOfMassY;
+      node->sw->pointID = node->pointID;
     } else {
       node->nw->mass = node->mass;
       node->nw->centerOfMassX = node->centerOfMassX;
       node->nw->centerOfMassY = node->centerOfMassY;
+      node->nw->pointID = node->pointID;
     }
   } else {
     if(node->centerOfMassY < node->quadrantY) {
       node->se->mass = node->mass;
       node->se->centerOfMassX = node->centerOfMassX;
       node->se->centerOfMassY = node->centerOfMassY;
+      node->se->pointID = node->pointID;
     } else {
       node->ne->mass = node->mass;
       node->ne->centerOfMassX = node->centerOfMassX;
       node->ne->centerOfMassY = node->centerOfMassY;
+      node->ne->pointID = node->pointID;
     }
   }
 }

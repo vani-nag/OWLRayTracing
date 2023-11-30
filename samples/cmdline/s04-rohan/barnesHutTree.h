@@ -39,6 +39,7 @@ namespace owl {
     Node* sw;
     Node* se;
     bool isLeaf;
+    int pointID;
 
     Node(float x, float y, float s);
 
@@ -52,6 +53,7 @@ namespace owl {
       sw = nullptr;
       se = nullptr;
       isLeaf = false;
+      pointID = 0;
     }
 
   };

@@ -401,6 +401,8 @@ OWL_API void
 owlContextSetNumAttributeValues(OWLContext context,
                                 size_t numAttributeValues);
 
+OWL_API void owlContextPrintSER(OWLContext _context);
+
 /*! tells OptiX to specialize the values of certain launch parameters
   when compiling modules, and ignore their values at launch.
   See section 6.3.1 of the OptiX 7.2 programming guide.

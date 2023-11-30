@@ -81,6 +81,8 @@ namespace owl {
     /*! enables motion blur - should be done right after context
       creation, and before SBT and pipeline get built */
     void enableMotionBlur();
+
+    void printSERContextValue();
     
     /*! enables support for curves; has to be called before creating
         any curves geometries get created, and before the pipeline

@@ -135,6 +135,11 @@ owlContextSetBoundLaunchParamValues(OWLContext _context,
   checkGet(_context)->setBoundLaunchParamValues(boundValues);
 }
 
+OWL_API void owlContextPrintSER(OWLContext _context) {
+  LOG_API_CALL();
+  checkGet(_context)->printSERContextValue();
+} 
+
 
 /*! sets maximum instancing depth for the given context:
 
@@ -195,7 +200,7 @@ OWL_API void owlBuildSBT(OWLContext _context,
 OWL_API void owlBuildPrograms(OWLContext _context)
 {
   LOG_API_CALL();
-  bool debug = false;
+  bool debug = true;
   checkGet(_context)->buildPrograms(debug);
 }
   

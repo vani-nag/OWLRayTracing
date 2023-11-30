@@ -30,14 +30,6 @@
 # add_test(sample05-rtow
 #   ${CMAKE_BINARY_DIR}/sample05-rtow)
 
-find_library(GMP_LIBRARIES gmp)
-find_library(GMPXX_LIBRARIES gmpxx)
-
-# Check if GMP libraries are found
-if (NOT GMP_LIBRARIES OR NOT GMPXX_LIBRARIES)
-    message(FATAL_ERROR "GMP libraries not found.")
-endif()
-
 embed_ptx(
   OUTPUT_TARGET
     sample04-rohan-ptx
@@ -47,17 +39,14 @@ embed_ptx(
     deviceCode.cu
 )
 
-include_directories("/home/shay/a/rgangar/RTX/boost/libs/multiprecision/include")
-include_directories("/home/shay/a/rgangar/RTX/boost/libs/math/include")
-
+# include_directories("/home/shay/a/rgangar/RTX/boost/libs/multiprecision/include")
+# include_directories("/home/shay/a/rgangar/RTX/boost/libs/math/include")
 add_executable(sample04-rohan hostCode.cpp barnesHutTree.cpp bitmap.cpp)
 target_link_libraries(sample04-rohan
   PRIVATE
     sample04-rohan-ptx
     owl::owl
     stb_image
-    ${GMP_LIBRARIES}
-    ${GMPXX_LIBRARIES}
 )
 add_test(sample04-rohan
   ${CMAKE_BINARY_DIR}/sample04-rohan)

@@ -596,6 +596,17 @@ namespace owl {
     } 
   }
 
+  void Context::printSERContextValue() {
+    for (auto device : getDevices()) {
+      uint32_t serFlags;
+      optixDeviceContextGetProperty(
+      device->optixContext,
+      OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING,
+      &serFlags, sizeof(serFlags));
+    printf("SER %d\n", serFlags);
+    }
+  }
+
   void Context::enableMotionBlur()
   {
     motionBlurEnabled = true;

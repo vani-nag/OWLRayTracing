@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 10000000;
+constexpr int NUM_POINTS = 100000000;
 constexpr int NUM_STEPS = 1;
 
 using namespace owl;
@@ -76,17 +76,6 @@ using namespace std;
   /* variables for the miss program */
   struct MissProgData
   {
-  };
-
-  struct PerRayData
-  {
-    float r_2;
-    int pointID;
-    int primID;
-    CustomRay rayToLaunch;
-    uint8_t rayEnd;
-    float rayLength;
-    float mass;
   };
 
 	struct MyGlobals 
