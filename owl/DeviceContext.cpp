@@ -258,7 +258,7 @@ namespace owl {
     // ------------------------------------------------------------------
     // configure default module compile options
     // ------------------------------------------------------------------
-  if (debug) {
+  if (!debug) {
     moduleCompileOptions.maxRegisterCount  = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT ;
     moduleCompileOptions.optLevel          = OPTIX_COMPILE_OPTIMIZATION_LEVEL_3;
 #if OPTIX_VERSION >= 70400
