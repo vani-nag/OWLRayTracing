@@ -80,14 +80,13 @@ u_int *deviceOutputIntersectionData;
 vector<CustomRay> primaryLaunchRays(NUM_POINTS);
 vector<CustomRay> orderedPrimaryLaunchRays(NUM_POINTS);
 vector<deviceBhNode> deviceBhNodes;
-deviceBhNode *deviceBhNodesPointer;
+formattedDeviceBhNode formattedDeviceBHNodes;
 Point *devicePoints;
 int totalNumNodes = 0;
 float minNodeSValue = GRID_SIZE + 1.0f;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
-vector<IntersectionResult> intersectionResults(INTERSECTIONS_SIZE);
 
 vector<vec3f> vertices;
 vector<vec3i> indices;
@@ -255,6 +254,12 @@ void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
 
 }
 
+void convertToFormattedDeviceBHNodes() {
+  for(int i = 0; i < deviceBhNodes.size(); i++) {
+
+  }
+}
+
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
 
@@ -264,81 +269,81 @@ int main(int ac, char **av) {
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.f, 0.f, gridSize);
   
-  FILE *outFile = fopen("../points.txt", "w");
-  if (!outFile) {
-    std::cerr << "Error opening file for writing." << std::endl;
-    return 1;
+  // FILE *outFile = fopen("../points.txt", "w");
+  // if (!outFile) {
+  //   std::cerr << "Error opening file for writing." << std::endl;
+  //   return 1;
+  // }
+
+  // fprintf(outFile, "%d\n", NUM_POINTS);
+  // fprintf(outFile, "%d\n", NUM_STEPS);
+  // fprintf(outFile, "%f\n", (0.025));
+  // fprintf(outFile, "%f\n", (0.05));
+  // fprintf(outFile, "%f\n", THRESHOLD);
+
+  // int numPointsSoFar = 0;
+  // while (numPointsSoFar < NUM_POINTS) {
+  //   Point p;
+  //   p.x = dis(gen);
+  //   p.y = dis(gen);
+  //   p.z = 0.0f;
+  //   p.vel_x = 0.0f;
+  //   p.vel_y = 0.0f;
+  //   p.vel_z = 0.0f;
+  //   p.mass = disMass(gen);
+  //   p.idX = numPointsSoFar;
+
+  //   fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
+  //   //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
+  //   points.push_back(p);
+  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  //   primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
+  //   primaryLaunchRays[numPointsSoFar].primID = 0;
+  //   primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  //   numPointsSoFar++;
+  // }
+  // fclose(outFile);
+
+  FILE *inFile = fopen("../points.txt", "r");
+  if (!inFile) {
+      std::cerr << "Error opening file for reading." << std::endl;
+      return 1;
   }
 
-  fprintf(outFile, "%d\n", NUM_POINTS);
-  fprintf(outFile, "%d\n", NUM_STEPS);
-  fprintf(outFile, "%f\n", (0.025));
-  fprintf(outFile, "%f\n", (0.05));
-  fprintf(outFile, "%f\n", THRESHOLD);
+  float randomStuff;
 
-  int numPointsSoFar = 0;
-  while (numPointsSoFar < NUM_POINTS) {
-    Point p;
-    p.x = dis(gen);
-    p.y = dis(gen);
-    p.z = 0.0f;
-    p.vel_x = 0.0f;
-    p.vel_y = 0.0f;
-    p.vel_z = 0.0f;
-    p.mass = disMass(gen);
-    p.idX = numPointsSoFar;
-
-    fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
-    //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
-    points.push_back(p);
-    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-    primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
-    primaryLaunchRays[numPointsSoFar].primID = 0;
-    primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
-    numPointsSoFar++;
+  for(int i = 0; i < 5; i++) {
+    fscanf(inFile, "%f\n", &randomStuff);
+    printf("Read %f\n", randomStuff);
   }
-  fclose(outFile);
 
-  // FILE *inFile = fopen("../points.txt", "r");
-  // if (!inFile) {
-  //     std::cerr << "Error opening file for reading." << std::endl;
-  //     return 1;
-  // }
+  int launchIndex = 0;
+  float x, y,z, mass;
+  vec3f velRead;
+    // Read three floats from each line until the end of the file
+  while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
+      //Process the floats as needed
+      Point point;
+      point.x = x;
+      point.y = y;
+      point.z = 0.0f;
+      point.vel_x = velRead.x;
+      point.vel_y = velRead.u;
+      point.vel_z = velRead.z;
+      point.mass = mass;
+      point.idX = launchIndex;
 
-  // float randomStuff;
+      if(launchIndex == 0) {
+        printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
+      }
 
-  // for(int i = 0; i < 5; i++) {
-  //   fscanf(inFile, "%f\n", &randomStuff);
-  //   printf("Read %f\n", randomStuff);
-  // }
-
-  // int launchIndex = 0;
-  // float x, y,z, mass;
-  // vec3f velRead;
-  //   // Read three floats from each line until the end of the file
-  // while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
-  //     //Process the floats as needed
-  //     Point point;
-  //     point.x = x;
-  //     point.y = y;
-  //     point.z = 0.0f;
-  //     point.vel_x = velRead.x;
-  //     point.vel_y = velRead.u;
-  //     point.vel_z = velRead.z;
-  //     point.mass = mass;
-  //     point.idX = launchIndex;
-
-  //     if(launchIndex == 0) {
-  //       printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
-  //     }
-
-  //     points.push_back(point);
-  //     primaryLaunchRays[launchIndex].pointID = launchIndex;
-  //     primaryLaunchRays[launchIndex].primID = 0;
-  //     primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
-  //     launchIndex++;
-  // }
-  // fclose(inFile);
+      points.push_back(point);
+      primaryLaunchRays[launchIndex].pointID = launchIndex;
+      primaryLaunchRays[launchIndex].primID = 0;
+      primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+      launchIndex++;
+  }
+  fclose(inFile);
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
@@ -391,6 +396,8 @@ int main(int ac, char **av) {
   installAutoRopes(root, addressToIndex);
   auto auto_ropes_end = chrono::steady_clock::now();
   profileStats->installAutoRopesTime += chrono::duration_cast<chrono::microseconds>(auto_ropes_end - auto_ropes_start);
+
+  convertToFormattedDeviceBHNodes();
 
   OWLBuffer deviceBhNodesBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),

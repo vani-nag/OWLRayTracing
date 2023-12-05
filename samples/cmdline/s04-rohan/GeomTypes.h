@@ -21,7 +21,11 @@
 #include <vector>
 #include <chrono>
 
+<<<<<<< HEAD
 constexpr int NUM_POINTS = 10000000;
+=======
+constexpr int NUM_POINTS = 1000000;
+>>>>>>> 8d5c6b3 (better)
 constexpr int NUM_STEPS = 1;
 
 using namespace owl;
@@ -39,15 +43,16 @@ using namespace std;
     uint8_t isLeaf;
   };
 
-  struct IntersectionResult {
-    int index;
-    int primID;
-    float mass;
-    float rayLength;
-    uint8_t didIntersect;
-    uint8_t isLeaf;
-
-    //IntersectionResult() : index(0), primID(0), mass(0), rayLength(0), didIntersect(0) {}
+  struct formattedDeviceBhNode {
+    float* mass;
+    float* s;
+    float* centerOfMassX;
+    float* centerOfMassY;
+    vec3f* nextRayLocation;
+    int* nextPrimId;
+    vec3f* autoRopeRayLocation;
+    int* autoRopePrimId;
+    uint8_t* isLeaf;
   };
 
   /* variables for the triangle mesh geometry */

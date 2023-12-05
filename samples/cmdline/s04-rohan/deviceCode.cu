@@ -63,7 +63,7 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   // compute force between point and bhNode
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
   float totalMass = __uint_as_float(optixGetPayload_1());
-  float currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
+  float currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * .0001f;
 
   optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
   //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
@@ -83,7 +83,7 @@ OPTIX_MISS_PROGRAM(miss)()
   float currentMass = 0.0f;
   
   if(bhNode.isLeaf == 1 && optixGetPayload_0() == 0) {
-    currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
+    currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * .0001f;
     optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
     //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
     //if(prd.pointID == 5382) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
@@ -141,14 +141,45 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
                /*SBToffset    */ray.rayType,
                /*SBTstride    */ray.numRayTypes,
                /*missSBTIndex */ray.rayType,
-               p0,
-               p1,
-               p2, p3, p4,
+               p0, p1, p2, p3, p4,
                p5, p6, p7);
-    optixInvoke(p0, p1, p2, p3, p4, p5, p6, p7);
+    
+    //int didHit = optixHitObjectIsHit() ? 1 : 0;
+    //float totalMass = __uint_as_float(p1);
+    //float currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
+    //p1 = (optixHitObjectIsHit() || (bhNode.isLeaf == 1 && p0 == 0)) ? __float_as_uint((totalMass + currentMass)): p1;
+    //p4 = bhNode.autoRopePrimId;
+    if(optixHitObjectIsHit()) {
+      float totalMass = __uint_as_float(p1);
+      float currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
 
+      p1 = __float_as_uint((totalMass + currentMass));
+      //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
+
+      p4 = bhNode.autoRopePrimId;
+      p5 = __float_as_uint(bhNode.autoRopeRayLocation.x);
+      p6 = __float_as_uint(bhNode.autoRopeRayLocation.y);
+    } else {
+      float totalMass = __uint_as_float(p1);
+      float currentMass = 0.0f;
+      
+      if(bhNode.isLeaf == 1 && p0 == 0) {
+        currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
+        p1 = __float_as_uint((totalMass + currentMass));
+        //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
+        //if(prd.pointID == 5382) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
+      } 
+      p4 = bhNode.nextPrimId;
+      p5 = __float_as_uint(bhNode.nextRayLocation.x);
+      p6 = __float_as_uint(bhNode.nextRayLocation.y);
+    }
+      
+    //optixInvoke(p0, p1, p2, p3, p4, p5, p6, p7);
 
     bhNode = optixLaunchParams.deviceBhNodes[p4];
+
+    ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
+    p3 = __float_as_uint(bhNode.mass);
 
     dx = point.x - bhNode.centerOfMassX;
     dy = point.y - bhNode.centerOfMassY;
@@ -157,11 +188,11 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     p7 = __float_as_int(r_2);
 
 
-    ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
+    //ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
     ray.tmax = rayLength;
     rayEnd = (p4 >= optixLaunchParams.numPrims || p4 == 0) ? 1 : 0;
     p0 = (rayLength == 0.0f) ? 1 : 0;
-    p3 = __float_as_uint(bhNode.mass);
+    //p3 = __float_as_uint(bhNode.mass);
     // if(prd.pointID == 8124) {
     //   IntersectionResult result;
     //   result.index = index;
