@@ -128,6 +128,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   //if(prd.pointID == 5382) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
   // Launch rays
+  int index = 0;
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
   while(rayEnd == 0) {
     optixTraverse(self.world,
@@ -187,6 +188,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     rayLength = sqrtf(r_2) * 0.5;
     p7 = __float_as_int(r_2);
 
+    //if(index == 10000) optixReorder();
 
     //ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
     ray.tmax = rayLength;
@@ -207,6 +209,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     //   //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
     // }
     //break;
+    index++;
   }
   optixLaunchParams.computedForces[pointID] = __uint_as_float(p1);
 }

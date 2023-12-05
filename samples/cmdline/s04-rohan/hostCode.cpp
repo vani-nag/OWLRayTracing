@@ -531,26 +531,26 @@ int main(int ac, char **av) {
   printf("CPU OUTPUT!!!\n");
   printf("----------------------------------------\n");
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  tree->computeForces(root, points, cpuComputedForces);
+  //tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
   printf("----------------------------------------\n");
 
-  int pointsFailing = 0;
-  for(int i = 0; i < NUM_POINTS; i++) {
-    float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-    if(percent_error > 2.5f) {
-      // LOG_OK("++++++++++++++++++++++++");
-      // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
-      // LOG_OK("++++++++++++++++++++++++");
-      // printf("RT force = %f\n", rtComputedForces[i]);
-      // printf("CPU force = %f\n", cpuComputedForces[i]);
-      // LOG_OK("++++++++++++++++++++++++");
-      // printf("\n");
-      pointsFailing++;
-    }
-  }
-  printf("Points failing percent error: %d\n", pointsFailing);
+  // int pointsFailing = 0;
+  // for(int i = 0; i < NUM_POINTS; i++) {
+  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+  //   if(percent_error > 2.5f) {
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // printf("RT force = %f\n", rtComputedForces[i]);
+  //     // printf("CPU force = %f\n", cpuComputedForces[i]);
+  //     // LOG_OK("++++++++++++++++++++++++");
+  //     // printf("\n");
+  //     pointsFailing++;
+  //   }
+  // }
+  // printf("Points failing percent error: %d\n", pointsFailing);
 
   // ##################################################################
   // and finally, clean up
