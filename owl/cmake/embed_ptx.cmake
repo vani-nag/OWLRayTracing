@@ -63,11 +63,7 @@ function(embed_ptx)
   target_link_libraries(${PTX_TARGET} PRIVATE ${EMBED_PTX_PTX_LINK_LIBRARIES})
   set_property(TARGET ${PTX_TARGET} PROPERTY CUDA_PTX_COMPILATION ON)
   set_property(TARGET ${PTX_TARGET} PROPERTY CUDA_ARCHITECTURES OFF)
-<<<<<<< HEAD
   target_compile_options(${PTX_TARGET} PRIVATE "-lineinfo")
-=======
-  target_compile_options(${PTX_TARGET} PRIVATE "--generate-line-info") ## "--use_fast_math" "--relocatable-device-code=true" "-Wno-deprecated-gpu-targets
->>>>>>> 8d5c6b3 (better)
 
   ## Create command to run the bin2c via the CMake script ##
 

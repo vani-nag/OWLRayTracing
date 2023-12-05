@@ -21,11 +21,7 @@
 #include <vector>
 #include <chrono>
 
-<<<<<<< HEAD
-constexpr int NUM_POINTS = 10000000;
-=======
 constexpr int NUM_POINTS = 1000000;
->>>>>>> 8d5c6b3 (better)
 constexpr int NUM_STEPS = 1;
 
 using namespace owl;
