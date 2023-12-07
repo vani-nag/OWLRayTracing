@@ -28,30 +28,33 @@ namespace owl {
   struct Node {
     float quadrantX;
     float quadrantY;
+    float quadrantZ;
     float mass;
     float s;
     // uint8_t numPoints;
     // int pointsIdx[MAX_POINTS_PER_LEAF];
     float centerOfMassX;
     float centerOfMassY;
-    Node* nw;
-    Node* ne;
-    Node* sw;
-    Node* se;
+    float centerOfMassZ;
+    Node* children[8];
+    // Node* nw;
+    // Node* ne;
+    // Node* sw;
+    // Node* se;
     bool isLeaf;
     int pointID;
 
-    Node(float x, float y, float s);
+    Node(float x, float y, float z, float s);
 
     Node() {
       mass = 0;
       s = 0;
       centerOfMassX = 0;
       centerOfMassY = 0;
-      nw = nullptr;
-      ne = nullptr;
-      sw = nullptr;
-      se = nullptr;
+      centerOfMassZ = 0;
+      for(int i = 0; i < 8; i++) {
+        children[i] = nullptr;
+      }
       isLeaf = false;
       pointID = 0;
     }

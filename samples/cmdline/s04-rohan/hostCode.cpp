@@ -96,12 +96,6 @@ vector<Node*> dfsBHNodes;
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
-float euclideanDistance(const Point& p1, const Point& p2) {
-    float dx = p1.x - p2.x;
-    float dy = p1.y - p2.y;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
 void dfsTreeSetup() {
   float prevS = gridSize;
   float nextGridSize = gridSize / 2.0;
@@ -126,7 +120,7 @@ void dfsTreeSetup() {
       // Print front of queue and remove it from queue
       Node* node = dfsBHNodes[index];
 
-      if(node->ne == nullptr) {
+      if(node->children[0] == nullptr) {
         node->isLeaf = true;
       } else {
         node->isLeaf = false;
@@ -136,11 +130,13 @@ void dfsTreeSetup() {
       //   printf("Triangle loc prev %.9f\n", static_cast<float>(triangleXLocation));
       // }
       //triangleXLocation = triangleXLocation + FloatType(node->s);
-      triangleXLocation += node->s;
+      triangleXLocation += std::sqrt(node->s);
+      //triangleXLocation += node->s;
       if(node->s < minNodeSValue) minNodeSValue = node->s;
       if(triangleXLocation >= TRIANGLEX_THRESHOLD) {
         level += 3.0f;
-        triangleXLocation = node->s;
+        triangleXLocation = std::sqrt(node->s);
+        //triangleXLocation = node->s;
       }
       // if(node->mass == static_cast<float>(2505.400879)) {
       //   printf("Node-s is %.9f\n",  node->s);
@@ -166,6 +162,7 @@ void dfsTreeSetup() {
       currentBhNode.s = node->s;
       currentBhNode.centerOfMassX = node->centerOfMassX;
       currentBhNode.centerOfMassY = node->centerOfMassY;
+      currentBhNode.centerOfMassZ = node->centerOfMassZ;
       currentBhNode.isLeaf = node->isLeaf ? 1 : 0;
       currentBhNode.nextRayLocation = vec3f{triangleXLocationCasted, level, 0.0f};
       currentBhNode.nextPrimId = primIDIndex;
@@ -184,7 +181,7 @@ void orderPointsDFS() {
   int primaryRayIndex = 0;
   for(int i = 0; i < dfsBHNodes.size(); i++) {
     //printf("deviceBhNodes index: %d | nextPrimId %d\n", i, deviceBhNodes[i].nextPrimId);
-    if(dfsBHNodes[i]->ne == nullptr) {
+    if(dfsBHNodes[i]->children[0] == nullptr) {
       orderedPrimaryLaunchRays[primaryRayIndex].pointID = dfsBHNodes[i]->pointID;
       orderedPrimaryLaunchRays[primaryRayIndex].primID = 0;
       orderedPrimaryLaunchRays[primaryRayIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
@@ -200,11 +197,14 @@ void treeToDFSArray(Node *node, std::map<Node*, int>& addressToIndex, int& dfsIn
     addressToIndex[node] = dfsIndex;
     dfsIndex++;
 
-    if(node->nw != nullptr) {
-      if(node->nw->mass != 0.0f) treeToDFSArray(node->nw, addressToIndex, dfsIndex);
-      if(node->ne->mass != 0.0f) treeToDFSArray(node->ne, addressToIndex, dfsIndex);
-      if(node->sw->mass != 0.0f) treeToDFSArray(node->sw, addressToIndex, dfsIndex);
-      if(node->se->mass != 0.0f) treeToDFSArray(node->se, addressToIndex, dfsIndex);
+    if(node->children[0] != nullptr) {
+      for(int i = 0; i < 8; i++) {
+        if(node->children[i]->mass != 0.0f) treeToDFSArray(node->children[i], addressToIndex, dfsIndex);
+      }
+      // if(node->nw->mass != 0.0f) treeToDFSArray(node->nw, addressToIndex, dfsIndex);
+      // if(node->ne->mass != 0.0f) treeToDFSArray(node->ne, addressToIndex, dfsIndex);
+      // if(node->sw->mass != 0.0f) treeToDFSArray(node->sw, addressToIndex, dfsIndex);
+      // if(node->se->mass != 0.0f) treeToDFSArray(node->se, addressToIndex, dfsIndex);
     }
   }
 }
@@ -242,10 +242,15 @@ void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
       } 
 
       // Enqueue child nodes in the desired order
-      if (currentNode->se && currentNode->se->mass != 0.0f) ropeStack.push(currentNode->se);
-      if (currentNode->sw && currentNode->sw->mass != 0.0f) ropeStack.push(currentNode->sw);
-      if (currentNode->ne && currentNode->ne->mass != 0.0f) ropeStack.push(currentNode->ne);
-      if (currentNode->nw && currentNode->nw->mass != 0.0f) ropeStack.push(currentNode->nw);
+      for(int i = 7; i >= 0; i--) {
+        if(currentNode->children[i] != nullptr && currentNode->children[i]->mass != 0.0f) {
+          ropeStack.push(currentNode->children[i]);
+        }
+      }
+      // if (currentNode->se && currentNode->se->mass != 0.0f) ropeStack.push(currentNode->se);
+      // if (currentNode->sw && currentNode->sw->mass != 0.0f) ropeStack.push(currentNode->sw);
+      // if (currentNode->ne && currentNode->ne->mass != 0.0f) ropeStack.push(currentNode->ne);
+      // if (currentNode->nw && currentNode->nw->mass != 0.0f) ropeStack.push(currentNode->nw);
       iterations++;
     }
 
@@ -267,7 +272,7 @@ int main(int ac, char **av) {
   // Building Barnes Hut Tree
   // ##################################################################
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
-  Node* root = new Node(0.f, 0.f, gridSize);
+  Node* root = new Node(0.0f, 0.0f, 0.0f, gridSize);
   
   // FILE *outFile = fopen("../points.txt", "w");
   // if (!outFile) {
@@ -312,9 +317,26 @@ int main(int ac, char **av) {
 
   float randomStuff;
 
-  for(int i = 0; i < 5; i++) {
-    fscanf(inFile, "%f\n", &randomStuff);
-    printf("Read %f\n", randomStuff);
+  int numPointsSoFar = 0;
+  while (numPointsSoFar < NUM_POINTS) {
+    Point p;
+    p.x = dis(gen);
+    p.y = dis(gen);
+    p.z = dis(gen);
+    p.vel_x = 0.0f;
+    p.vel_y = 0.0f;
+    p.vel_z = 0.0f;
+    p.mass = disMass(gen);
+    p.idX = numPointsSoFar;
+
+    fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
+    //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
+    points.push_back(p);
+    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+    primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
+    primaryLaunchRays[numPointsSoFar].primID = 0;
+    primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
+    numPointsSoFar++;
   }
 
   int launchIndex = 0;

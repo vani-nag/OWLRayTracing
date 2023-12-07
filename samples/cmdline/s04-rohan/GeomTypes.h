@@ -32,6 +32,7 @@ using namespace std;
     float s;
     float centerOfMassX;
     float centerOfMassY;
+    float centerOfMassZ;
     vec3f nextRayLocation;
     int nextPrimId;
     vec3f autoRopeRayLocation;

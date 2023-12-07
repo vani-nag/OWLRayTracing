@@ -108,9 +108,10 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   // Calculate distance between point and bh node
   float dx = fabs(point.x - bhNode.centerOfMassX);
   float dy = fabs(point.y - bhNode.centerOfMassY);
+  float dz = fabs(point.z - bhNode.centerOfMassZ);
 
   int pointID = currentRay.pointID;
-  float r_2 = (dx * dx) + (dy * dy);
+  float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
   uint8_t rayEnd = 0;
 
   unsigned int p0 = 0;                            // raySelf
@@ -124,9 +125,11 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   //rd.hit = 0; 
   //prd.insertIndex = 0;
   float rayLength = sqrtf(r_2) * 0.5f;
+  rayLength = sqrtf(rayLength);
   //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
   //if(prd.pointID == 5382) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
+  int index = 0;
   // Launch rays
   int index = 0;
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
@@ -138,21 +141,14 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
                ray.tmax,
                ray.time,
                ray.visibilityMask,
-                OPTIX_RAY_FLAG_DISABLE_ANYHIT,
+               OPTIX_RAY_FLAG_DISABLE_ANYHIT | OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT,
                /*SBToffset    */ray.rayType,
                /*SBTstride    */ray.numRayTypes,
                /*missSBTIndex */ray.rayType,
                p0, p1, p2, p3, p4,
                p5, p6, p7);
-    
-    //int didHit = optixHitObjectIsHit() ? 1 : 0;
-    //float totalMass = __uint_as_float(p1);
-    //float currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
-    //p1 = (optixHitObjectIsHit() || (bhNode.isLeaf == 1 && p0 == 0)) ? __float_as_uint((totalMass + currentMass)): p1;
-    //p4 = bhNode.autoRopePrimId;
-    if(optixHitObjectIsHit()) {
-      float totalMass = __uint_as_float(p1);
-      float currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
+    //optixReorder();
+    optixInvoke(p0, p1, p2, p3, p4, p5, p6, p7);
 
       p1 = __float_as_uint((totalMass + currentMass));
       //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
@@ -184,8 +180,10 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 
     dx = point.x - bhNode.centerOfMassX;
     dy = point.y - bhNode.centerOfMassY;
-    r_2 = (dx * dx) + (dy * dy);
-    rayLength = sqrtf(r_2) * 0.5;
+    dz = point.z - bhNode.centerOfMassZ;
+    r_2 = (dx * dx) + (dy * dy) + (dz * dz);
+    rayLength = sqrtf(r_2) * 0.5f;
+    rayLength = sqrtf(rayLength);
     p7 = __float_as_int(r_2);
 
     //if(index == 10000) optixReorder();
@@ -193,6 +191,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     //ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
     ray.tmax = rayLength;
     rayEnd = (p4 >= optixLaunchParams.numPrims || p4 == 0) ? 1 : 0;
+    //optixReorder(rayEnd, 1);
     p0 = (rayLength == 0.0f) ? 1 : 0;
     //p3 = __float_as_uint(bhNode.mass);
     // if(prd.pointID == 8124) {
