@@ -25,34 +25,6 @@ __constant__ MyGlobals optixLaunchParams;
 ////////////////////////////////////////////////////////////////CODE BEGINS//////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template<typename RayType, typename PRD>
-inline __device__
-  void owlTraverse(OptixTraversableHandle traversable,
-                const RayType &ray,
-                PRD           &prd,
-                uint32_t rayFlags = 0u)
-  {
-    unsigned int           p0 = 0;
-    unsigned int           p1 = 0;
-    owl::packPointer(&prd,p0,p1);
-
-    optixTraverse(traversable,
-               (const float3&)ray.origin,
-               (const float3&)ray.direction,
-               ray.tmin,
-               ray.tmax,
-               ray.time,
-               ray.visibilityMask,
-                OPTIX_RAY_FLAG_DISABLE_ANYHIT,
-               /*SBToffset    */ray.rayType,
-               /*SBTstride    */ray.numRayTypes,
-               /*missSBTIndex */ray.rayType,
-               p0,
-               p1);
-    //optixReorder();
-    optixInvoke(p0, p1);
-}
-
 OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 {
   //const TrianglesGeomData &self = owl::getProgramData<TrianglesGeomData>();
@@ -131,7 +103,6 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 
   int index = 0;
   // Launch rays
-  int index = 0;
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
   while(rayEnd == 0) {
     optixTraverse(self.world,
@@ -149,29 +120,6 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
                p5, p6, p7);
     //optixReorder();
     optixInvoke(p0, p1, p2, p3, p4, p5, p6, p7);
-
-      p1 = __float_as_uint((totalMass + currentMass));
-      //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
-
-      p4 = bhNode.autoRopePrimId;
-      p5 = __float_as_uint(bhNode.autoRopeRayLocation.x);
-      p6 = __float_as_uint(bhNode.autoRopeRayLocation.y);
-    } else {
-      float totalMass = __uint_as_float(p1);
-      float currentMass = 0.0f;
-      
-      if(bhNode.isLeaf == 1 && p0 == 0) {
-        currentMass = (((__uint_as_float(p2) * __uint_as_float(p3))) / __uint_as_float(p7)) * .0001f;
-        p1 = __float_as_uint((totalMass + currentMass));
-        //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
-        //if(prd.pointID == 5382) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
-      } 
-      p4 = bhNode.nextPrimId;
-      p5 = __float_as_uint(bhNode.nextRayLocation.x);
-      p6 = __float_as_uint(bhNode.nextRayLocation.y);
-    }
-      
-    //optixInvoke(p0, p1, p2, p3, p4, p5, p6, p7);
 
     bhNode = optixLaunchParams.deviceBhNodes[p4];
 
@@ -212,4 +160,3 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   }
   optixLaunchParams.computedForces[pointID] = __uint_as_float(p1);
 }
-

@@ -274,48 +274,17 @@ int main(int ac, char **av) {
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.0f, 0.0f, 0.0f, gridSize);
   
-  // FILE *outFile = fopen("../points.txt", "w");
-  // if (!outFile) {
-  //   std::cerr << "Error opening file for writing." << std::endl;
-  //   return 1;
-  // }
-
-  // fprintf(outFile, "%d\n", NUM_POINTS);
-  // fprintf(outFile, "%d\n", NUM_STEPS);
-  // fprintf(outFile, "%f\n", (0.025));
-  // fprintf(outFile, "%f\n", (0.05));
-  // fprintf(outFile, "%f\n", THRESHOLD);
-
-  // int numPointsSoFar = 0;
-  // while (numPointsSoFar < NUM_POINTS) {
-  //   Point p;
-  //   p.x = dis(gen);
-  //   p.y = dis(gen);
-  //   p.z = 0.0f;
-  //   p.vel_x = 0.0f;
-  //   p.vel_y = 0.0f;
-  //   p.vel_z = 0.0f;
-  //   p.mass = disMass(gen);
-  //   p.idX = numPointsSoFar;
-
-  //   fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
-  //   //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
-  //   points.push_back(p);
-  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-  //   primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
-  //   primaryLaunchRays[numPointsSoFar].primID = 0;
-  //   primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
-  //   numPointsSoFar++;
-  // }
-  // fclose(outFile);
-
-  FILE *inFile = fopen("../points.txt", "r");
-  if (!inFile) {
-      std::cerr << "Error opening file for reading." << std::endl;
-      return 1;
+  FILE *outFile = fopen("../points.txt", "w");
+  if (!outFile) {
+    std::cerr << "Error opening file for writing." << std::endl;
+    return 1;
   }
 
-  float randomStuff;
+  fprintf(outFile, "%d\n", NUM_POINTS);
+  fprintf(outFile, "%d\n", NUM_STEPS);
+  fprintf(outFile, "%f\n", (0.025));
+  fprintf(outFile, "%f\n", (0.05));
+  fprintf(outFile, "%f\n", THRESHOLD);
 
   int numPointsSoFar = 0;
   while (numPointsSoFar < NUM_POINTS) {
@@ -338,34 +307,47 @@ int main(int ac, char **av) {
     primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
     numPointsSoFar++;
   }
+  fclose(outFile);
 
-  int launchIndex = 0;
-  float x, y,z, mass;
-  vec3f velRead;
-    // Read three floats from each line until the end of the file
-  while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
-      //Process the floats as needed
-      Point point;
-      point.x = x;
-      point.y = y;
-      point.z = 0.0f;
-      point.vel_x = velRead.x;
-      point.vel_y = velRead.u;
-      point.vel_z = velRead.z;
-      point.mass = mass;
-      point.idX = launchIndex;
+  // FILE *inFile = fopen("../points.txt", "r");
+  // if (!inFile) {
+  //     std::cerr << "Error opening file for reading." << std::endl;
+  //     return 1;
+  // }
+  // float randomStuff;
 
-      if(launchIndex == 0) {
-        printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
-      }
+  // for(int i = 0; i < 5; i++) {
+  //   fscanf(inFile, "%f\n", &randomStuff);
+  //   printf("Read %f\n", randomStuff);
+  // }
 
-      points.push_back(point);
-      primaryLaunchRays[launchIndex].pointID = launchIndex;
-      primaryLaunchRays[launchIndex].primID = 0;
-      primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
-      launchIndex++;
-  }
-  fclose(inFile);
+  // int launchIndex = 0;
+  // float x, y,z, mass;
+  // vec3f velRead;
+  //   // Read three floats from each line until the end of the file
+  // while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
+  //     //Process the floats as needed
+  //     Point point;
+  //     point.x = x;
+  //     point.y = y;
+  //     point.z = z;
+  //     point.vel_x = velRead.x;
+  //     point.vel_y = velRead.u;
+  //     point.vel_z = velRead.z;
+  //     point.mass = mass;
+  //     point.idX = launchIndex;
+
+  //     if(launchIndex == 0) {
+  //       printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
+  //     }
+
+  //     points.push_back(point);
+  //     primaryLaunchRays[launchIndex].pointID = launchIndex;
+  //     primaryLaunchRays[launchIndex].primID = 0;
+  //     primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  //     launchIndex++;
+  // }
+  // fclose(inFile);
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
@@ -553,26 +535,26 @@ int main(int ac, char **av) {
   printf("CPU OUTPUT!!!\n");
   printf("----------------------------------------\n");
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  //tree->computeForces(root, points, cpuComputedForces);
+  tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
   printf("----------------------------------------\n");
 
-  // int pointsFailing = 0;
-  // for(int i = 0; i < NUM_POINTS; i++) {
-  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-  //   if(percent_error > 2.5f) {
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // printf("RT force = %f\n", rtComputedForces[i]);
-  //     // printf("CPU force = %f\n", cpuComputedForces[i]);
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // printf("\n");
-  //     pointsFailing++;
-  //   }
-  // }
-  // printf("Points failing percent error: %d\n", pointsFailing);
+  int pointsFailing = 0;
+  for(int i = 0; i < NUM_POINTS; i++) {
+    float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+    if(percent_error > 2.5f) {
+      // LOG_OK("++++++++++++++++++++++++");
+      // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
+      // LOG_OK("++++++++++++++++++++++++");
+      // printf("RT force = %f\n", rtComputedForces[i]);
+      // printf("CPU force = %f\n", cpuComputedForces[i]);
+      // LOG_OK("++++++++++++++++++++++++");
+      // printf("\n");
+      pointsFailing++;
+    }
+  }
+  printf("Points failing percent error: %d\n", pointsFailing);
 
   // ##################################################################
   // and finally, clean up
