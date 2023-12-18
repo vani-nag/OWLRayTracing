@@ -100,7 +100,7 @@ using namespace std;
     chrono::microseconds cpuForceCalculationTime;
     chrono::microseconds intersectionsSetupTime;
     chrono::microseconds treePathsRecrusiveSetupTime;
-    chrono::microseconds treePathsIterativeSetupTime;
+    chrono::microseconds iterativeStepTime;
 
     ProfileStatistics() : intersectionsTime(0), sceneBuildTime(0), totalProgramTime(0), treeBuildTime(0), forceCalculationTime(0), cpuForceCalculationTime(0), 
     intersectionsSetupTime(0) {}

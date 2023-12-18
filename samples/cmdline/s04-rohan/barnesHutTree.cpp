@@ -6,7 +6,7 @@
 
 using namespace owl;
 
-Node::Node(float x, float y, float z, float s) : quadrantX(x), quadrantY(y), quadrantZ(z), mass(0), s(s), centerOfMassX(0), centerOfMassY(0), centerOfMassZ(0) {
+Node::Node(float x, float y, float z, float s) : quadrantX(x), quadrantY(y), quadrantZ(z), mass(0), dfsIndex(0), s(s), centerOfMassX(0), centerOfMassY(0), centerOfMassZ(0) {
   for(int i = 0; i < 8; i++) {
     children[i] = nullptr;
   }

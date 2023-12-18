@@ -45,6 +45,7 @@
 // barnesHutStuff
 #include "barnesHutTree.h"
 #include "bitmap.h"
+#include <unordered_map> 
 
 #define LOG(message)                                            \
   cout << OWL_TERMINAL_BLUE;                               \
@@ -65,8 +66,8 @@ extern "C" char deviceCode_ptx[];
 // random init
 random_device rd;
 mt19937 gen(rd());
-uniform_real_distribution<float> dis(-5000.0f, 5000.0f);  // Range for X and Y coordinates
-uniform_real_distribution<float> disMass(100.0f, 2000.0f);  // Range mass 
+uniform_real_distribution<float> dis(GRID_SIZE/-2.0f, GRID_SIZE/2.0f);  // Range for X and Y coordinates
+uniform_real_distribution<float> disMass(10.0f, 2000.0f);  // Range mass 
 
 // global variables
 int deviceID;
@@ -191,25 +192,22 @@ void orderPointsDFS() {
 }
 
 
-void treeToDFSArray(Node *node, std::map<Node*, int>& addressToIndex, int& dfsIndex) {
+void treeToDFSArray(Node *node, int& dfsIndex) {
   if(node != nullptr) {
     dfsBHNodes.push_back(node);
-    addressToIndex[node] = dfsIndex;
+    node->dfsIndex = dfsIndex;
+    //addressToIndex[node] = dfsIndex;
     dfsIndex++;
 
     if(node->children[0] != nullptr) {
       for(int i = 0; i < 8; i++) {
-        if(node->children[i]->mass != 0.0f) treeToDFSArray(node->children[i], addressToIndex, dfsIndex);
+        if(node->children[i]->mass != 0.0f) treeToDFSArray(node->children[i], dfsIndex);
       }
-      // if(node->nw->mass != 0.0f) treeToDFSArray(node->nw, addressToIndex, dfsIndex);
-      // if(node->ne->mass != 0.0f) treeToDFSArray(node->ne, addressToIndex, dfsIndex);
-      // if(node->sw->mass != 0.0f) treeToDFSArray(node->sw, addressToIndex, dfsIndex);
-      // if(node->se->mass != 0.0f) treeToDFSArray(node->se, addressToIndex, dfsIndex);
     }
   }
 }
 
-void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
+void installAutoRopes(Node* root) {
     std::stack<Node*> ropeStack;
     ropeStack.push(root);
     int initial = 0;
@@ -223,12 +221,12 @@ void installAutoRopes(Node* root, std::map<Node*, int> addressToIndex) {
       //std::cout << "Node: Mass = " << currentNode->mass << ", Center of Mass = (" << currentNode->centerOfMassX << ", " << currentNode->centerOfMassY << "), quadrant = (" << currentNode->quadrantX << ", " << currentNode->quadrantY << ")" << "\n";
       ropeStack.pop();
 
-      int dfsIndex = addressToIndex[currentNode];
+      int dfsIndex = currentNode->dfsIndex;
       if(initial) {
         //printf("Roping to ---> ");
         if(ropeStack.size() != 0) {
           Node* autoRopeNode = ropeStack.top();
-          int ropeIndex = addressToIndex[autoRopeNode];
+          int ropeIndex = autoRopeNode->dfsIndex;
           //std::cout << "Node: Mass = " << autoRopeNode->mass << ", Center of Mass = (" << autoRopeNode->centerOfMassX << ", " << autoRopeNode->centerOfMassY << "), quadrant = (" << autoRopeNode->quadrantX << ", " << autoRopeNode->quadrantY << ")" << "\n";
           deviceBhNodes[dfsIndex].autoRopeRayLocation = deviceBhNodes[ropeIndex-1].nextRayLocation;
           deviceBhNodes[dfsIndex].autoRopePrimId = deviceBhNodes[ropeIndex-1].nextPrimId;
@@ -274,85 +272,83 @@ int main(int ac, char **av) {
   BarnesHutTree* tree = new BarnesHutTree(THRESHOLD, gridSize);
   Node* root = new Node(0.0f, 0.0f, 0.0f, gridSize);
   
-  FILE *outFile = fopen("../points.txt", "w");
-  if (!outFile) {
-    std::cerr << "Error opening file for writing." << std::endl;
-    return 1;
+  // FILE *outFile = fopen("../points.txt", "w");
+  // if (!outFile) {
+  //   std::cerr << "Error opening file for writing." << std::endl;
+  //   return 1;
+  // }
+
+  // fprintf(outFile, "%d\n", NUM_POINTS);
+  // fprintf(outFile, "%d\n", NUM_STEPS);
+  // fprintf(outFile, "%f\n", (0.025));
+  // fprintf(outFile, "%f\n", (0.05));
+  // fprintf(outFile, "%f\n", THRESHOLD);
+
+  // int numPointsSoFar = 0;
+  // while (numPointsSoFar < NUM_POINTS) {
+  //   Point p;
+  //   p.x = dis(gen);
+  //   p.y = dis(gen);
+  //   p.z = dis(gen);
+  //   p.vel_x = 0.0f;
+  //   p.vel_y = 0.0f;
+  //   p.vel_z = 0.0f;
+  //   p.mass = disMass(gen);
+  //   p.idX = numPointsSoFar;
+
+  //   fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
+  //   //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
+  //   points.push_back(p);
+  //   //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
+  //   primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
+  //   primaryLaunchRays[numPointsSoFar].primID = 0;
+  //   primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
+  //   numPointsSoFar++;
+  // }
+  // fclose(outFile);
+
+  FILE *inFile = fopen("../points.txt", "r");
+  if (!inFile) {
+      std::cerr << "Error opening file for reading." << std::endl;
+      return 1;
+  }
+  float randomStuff;
+
+  for(int i = 0; i < 5; i++) {
+    fscanf(inFile, "%f\n", &randomStuff);
+    printf("Read %f\n", randomStuff);
   }
 
-  fprintf(outFile, "%d\n", NUM_POINTS);
-  fprintf(outFile, "%d\n", NUM_STEPS);
-  fprintf(outFile, "%f\n", (0.025));
-  fprintf(outFile, "%f\n", (0.05));
-  fprintf(outFile, "%f\n", THRESHOLD);
+  int launchIndex = 0;
+  float x, y,z, mass;
+  vec3f velRead;
+    // Read three floats from each line until the end of the file
+  while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
+      //Process the floats as needed
+      Point point;
+      point.x = x;
+      point.y = y;
+      point.z = z;
+      point.vel_x = velRead.x;
+      point.vel_y = velRead.u;
+      point.vel_z = velRead.z;
+      point.mass = mass;
+      point.idX = launchIndex;
 
-  int numPointsSoFar = 0;
-  while (numPointsSoFar < NUM_POINTS) {
-    Point p;
-    p.x = dis(gen);
-    p.y = dis(gen);
-    p.z = dis(gen);
-    p.vel_x = 0.0f;
-    p.vel_y = 0.0f;
-    p.vel_z = 0.0f;
-    p.mass = disMass(gen);
-    p.idX = numPointsSoFar;
+      if(launchIndex == 0) {
+        printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
+      }
 
-    fprintf(outFile, "%f %f %f %f %f %f %f\n", p.mass, p.x, p.y, p.z, p.vel_x, p.vel_y, p.vel_z);
-    //outFile.write(reinterpret_cast<char*>(&p), sizeof(Point));
-    points.push_back(p);
-    //printf("Point # %d has x = %f, y = %f, mass = %f\n", i, p.x, p.y, p.mass);
-    primaryLaunchRays[numPointsSoFar].pointID = numPointsSoFar;
-    primaryLaunchRays[numPointsSoFar].primID = 0;
-    primaryLaunchRays[numPointsSoFar].orgin = vec3f(0.0f, 0.0f, 0.0f);
-    numPointsSoFar++;
+      points.push_back(point);
+      primaryLaunchRays[launchIndex].pointID = launchIndex;
+      primaryLaunchRays[launchIndex].primID = 0;
+      primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+      launchIndex++;
   }
-  fclose(outFile);
-
-  // FILE *inFile = fopen("../points.txt", "r");
-  // if (!inFile) {
-  //     std::cerr << "Error opening file for reading." << std::endl;
-  //     return 1;
-  // }
-  // float randomStuff;
-
-  // for(int i = 0; i < 5; i++) {
-  //   fscanf(inFile, "%f\n", &randomStuff);
-  //   printf("Read %f\n", randomStuff);
-  // }
-
-  // int launchIndex = 0;
-  // float x, y,z, mass;
-  // vec3f velRead;
-  //   // Read three floats from each line until the end of the file
-  // while (fscanf(inFile, "%f %f %f %f %f %f %f", &mass, &x, &y, &z, &(velRead.x), &(velRead.y), &(velRead.z)) == 7) {
-  //     //Process the floats as needed
-  //     Point point;
-  //     point.x = x;
-  //     point.y = y;
-  //     point.z = z;
-  //     point.vel_x = velRead.x;
-  //     point.vel_y = velRead.u;
-  //     point.vel_z = velRead.z;
-  //     point.mass = mass;
-  //     point.idX = launchIndex;
-
-  //     if(launchIndex == 0) {
-  //       printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
-  //     }
-
-  //     points.push_back(point);
-  //     primaryLaunchRays[launchIndex].pointID = launchIndex;
-  //     primaryLaunchRays[launchIndex].primID = 0;
-  //     primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
-  //     launchIndex++;
-  // }
-  // fclose(inFile);
+  fclose(inFile);
 
   OWLBuffer PointsBuffer = owlDeviceBufferCreate(
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
-
-
 
   LOG("Bulding Tree with # Of Bodies = " << points.size());
   auto tree_build_time_start = chrono::steady_clock::now();
@@ -362,13 +358,16 @@ int main(int ac, char **av) {
   auto tree_build_time_end = chrono::steady_clock::now();
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
 
+  auto iterative_step_time_start = chrono::steady_clock::now();
+
   auto tree_to_dfs_time_start = chrono::steady_clock::now();
-  std::map<Node*, int> addressToIndex;
   int dfsIndex = 0;
-  treeToDFSArray(root, addressToIndex, dfsIndex);
+  dfsBHNodes.reserve(points.size());
+  treeToDFSArray(root, dfsIndex);
   printf("Number of dfsNodes %lu\n",dfsBHNodes.size());
   auto tree_to_dfs_time_end = chrono::steady_clock::now();
   profileStats->treeToDFSTime += chrono::duration_cast<chrono::microseconds>(tree_to_dfs_time_end - tree_to_dfs_time_start);
+  std::cout << "Tree to DFS time: " << profileStats->treeToDFSTime.count() / 1000000.0 << " seconds." << std::endl;
 
   // order points in dfs order
   orderPointsDFS();
@@ -376,8 +375,6 @@ int main(int ac, char **av) {
   OWLBuffer primaryLaunchRaysBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(orderedPrimaryLaunchRays[0]),
                             orderedPrimaryLaunchRays.size(),orderedPrimaryLaunchRays.data());
-
-  //tree->printTree(root, 0, "root");
 
   // Get the device ID
   cudaGetDevice(&deviceID);
@@ -392,12 +389,13 @@ int main(int ac, char **av) {
   dfsTreeSetup();
   auto test_time_end = chrono::steady_clock::now();
   profileStats->createSceneTime += chrono::duration_cast<chrono::microseconds>(test_time_end - test_time_start);
+  
   // for(int i = 0; i < deviceBhNodes.size(); i++) {
   //   //printf("deviceBhNodes index: %d | nextPrimId %d\n", i, deviceBhNodes[i].nextPrimId);
   // }
 
   auto auto_ropes_start = chrono::steady_clock::now();
-  installAutoRopes(root, addressToIndex);
+  installAutoRopes(root);
   auto auto_ropes_end = chrono::steady_clock::now();
   profileStats->installAutoRopesTime += chrono::duration_cast<chrono::microseconds>(auto_ropes_end - auto_ropes_start);
 
@@ -446,6 +444,7 @@ int main(int ac, char **av) {
 
   auto scene_build_time_end = chrono::steady_clock::now();
   profileStats->sceneBuildTime += chrono::duration_cast<chrono::microseconds>(scene_build_time_end - scene_build_time_start);
+
   // -------------------------------------------------------
   // set up miss prog
   // -------------------------------------------------------
@@ -509,7 +508,6 @@ int main(int ac, char **av) {
   owlBuildPipeline(context);
   owlBuildSBT(context);
 
-
   printf("Size of malloc for bhNodes is %.2f gb.\n", (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0);
   printf("Size of malloc for points is %.2f gb.\n", (points.size() * sizeof(Point))/1000000000.0);
   printf("Minimum node-s value %f\n", minNodeSValue);
@@ -527,6 +525,9 @@ int main(int ac, char **av) {
   const float *rtComputedForces = (const float *)owlBufferGetPointer(ComputedForcesBuffer,0);
   auto end1 = std::chrono::steady_clock::now();
   profileStats->forceCalculationTime = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+
+  auto iterative_step_time_end = chrono::steady_clock::now();
+  profileStats->iterativeStepTime += chrono::duration_cast<chrono::microseconds>(iterative_step_time_end - iterative_step_time_start);
 
   // ##################################################################
   // Output Force Computations
@@ -575,6 +576,7 @@ int main(int ac, char **av) {
   std::cout << "Intersections setup time: " << profileStats->intersectionsSetupTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "RT Cores Force Calculations time: " << profileStats->forceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "CPU Force Calculations time: " << profileStats->cpuForceCalculationTime.count() / 1000000.0 << " seconds." << std::endl;
+  std::cout << "Iterative Step time: " << profileStats->iterativeStepTime.count() / 1000000.0 << " seconds." << std::endl;
   std::cout << "Total Program time: " << profileStats->totalProgramTime.count() / 1000000.0 << " seconds." << std::endl;
   printf("--------------------------------------------------------------\n");
 

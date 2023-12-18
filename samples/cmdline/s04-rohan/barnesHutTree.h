@@ -43,6 +43,7 @@ namespace owl {
     // Node* se;
     bool isLeaf;
     int pointID;
+    uint32_t dfsIndex;
 
     Node(float x, float y, float z, float s);
 
@@ -52,6 +53,7 @@ namespace owl {
       centerOfMassX = 0;
       centerOfMassY = 0;
       centerOfMassZ = 0;
+      dfsIndex = 0;
       for(int i = 0; i < 8; i++) {
         children[i] = nullptr;
       }

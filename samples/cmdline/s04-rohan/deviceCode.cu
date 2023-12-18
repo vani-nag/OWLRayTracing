@@ -131,8 +131,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     dz = point.z - bhNode.centerOfMassZ;
     r_2 = (dx * dx) + (dy * dy) + (dz * dz);
     rayLength = sqrtf(r_2) * 0.5f;
-    rayLength = sqrtf(rayLength);
     p7 = __float_as_int(r_2);
+    rayLength = sqrtf(rayLength);
 
     //if(index == 10000) optixReorder();
 
@@ -156,6 +156,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     //   //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
     // }
     //break;
+    //optixReorder(rayEnd, 1);
     index++;
   }
   optixLaunchParams.computedForces[pointID] = __uint_as_float(p1);
