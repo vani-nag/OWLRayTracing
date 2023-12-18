@@ -29,8 +29,6 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 {
   //const TrianglesGeomData &self = owl::getProgramData<TrianglesGeomData>();
   //const int primID = optixGetPrimitiveIndex();
-  //printf("primID: %d\n", primID);
-  //PerRayData &prd = owl::getPRD<PerRayData>();
 
   // compute force between point and bhNode
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
@@ -38,8 +36,6 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   float currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * .0001f;
 
   optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
-  //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
-
   optixSetPayload_4(bhNode.autoRopePrimId);
   optixSetPayload_5(__float_as_uint(bhNode.autoRopeRayLocation.x));
   optixSetPayload_6(__float_as_uint(bhNode.autoRopeRayLocation.y));

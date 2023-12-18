@@ -58,9 +58,6 @@
 
 extern "C" char deviceCode_ptx[];
 
-#define RAYS_ARRAY_SIZE 4000000000.0 // 6gb max
-#define INTERSECTIONS_SIZE 400
-#define MIN_DISTANCE 2.0f
 #define TRIANGLEX_THRESHOLD 50000.0f // this has to be greater than the GRID_SIZE in barnesHutTree.h
 
 // random init
@@ -70,20 +67,14 @@ uniform_real_distribution<float> dis(GRID_SIZE/-2.0f, GRID_SIZE/2.0f);  // Range
 uniform_real_distribution<float> disMass(10.0f, 2000.0f);  // Range mass 
 
 // global variables
-int deviceID;
 float gridSize = GRID_SIZE;
-vector<long int> nodesPerLevel;
-long int maxNodesPerLevel = 0;
 ProfileStatistics *profileStats = new ProfileStatistics();
-u_int *deviceOutputIntersectionData;
 
 // force calculation global variables
 vector<CustomRay> primaryLaunchRays(NUM_POINTS);
 vector<CustomRay> orderedPrimaryLaunchRays(NUM_POINTS);
 vector<deviceBhNode> deviceBhNodes;
-formattedDeviceBhNode formattedDeviceBHNodes;
 Point *devicePoints;
-int totalNumNodes = 0;
 float minNodeSValue = GRID_SIZE + 1.0f;
 vector<float> computedForces(NUM_POINTS, 0.0f);
 vector<float> maxForces(NUM_POINTS, 0.0f);
@@ -97,15 +88,12 @@ vector<Node*> dfsBHNodes;
 OWLContext context = owlContextCreate(nullptr, 1);
 OWLModule module = owlModuleCreate(context, deviceCode_ptx);
 
-void dfsTreeSetup() {
+void sceneSetup() {
   float prevS = gridSize;
-  float nextGridSize = gridSize / 2.0;
   float level = 0.0f;
-  long int currentNodesPerLevel = 0;
   int currentIndex = 0;
   int indIndex = 0;
   float triangleXLocation = 0.0f;
-  //float rayOriginXLocation = 0;
   int primIDIndex = 1;
   int index = 0;
   vertices.resize(dfsBHNodes.size() * 3);
@@ -172,8 +160,6 @@ void dfsTreeSetup() {
       indIndex += 1;
       primIDIndex++;
       // update counters
-      totalNumNodes++; //currentNodesPerLevel++;
-      
       index++;
   }
 }
@@ -191,12 +177,10 @@ void orderPointsDFS() {
   }
 }
 
-
 void treeToDFSArray(Node *node, int& dfsIndex) {
   if(node != nullptr) {
     dfsBHNodes.push_back(node);
     node->dfsIndex = dfsIndex;
-    //addressToIndex[node] = dfsIndex;
     dfsIndex++;
 
     if(node->children[0] != nullptr) {
@@ -217,23 +201,18 @@ void installAutoRopes(Node* root) {
     while (!ropeStack.empty()) {
       Node* currentNode = ropeStack.top();
       if(ropeStack.size() > maxStackSize) maxStackSize = ropeStack.size();
-      //printf("Stack Node ---> ");
-      //std::cout << "Node: Mass = " << currentNode->mass << ", Center of Mass = (" << currentNode->centerOfMassX << ", " << currentNode->centerOfMassY << "), quadrant = (" << currentNode->quadrantX << ", " << currentNode->quadrantY << ")" << "\n";
       ropeStack.pop();
 
       int dfsIndex = currentNode->dfsIndex;
       if(initial) {
-        //printf("Roping to ---> ");
         if(ropeStack.size() != 0) {
           Node* autoRopeNode = ropeStack.top();
           int ropeIndex = autoRopeNode->dfsIndex;
-          //std::cout << "Node: Mass = " << autoRopeNode->mass << ", Center of Mass = (" << autoRopeNode->centerOfMassX << ", " << autoRopeNode->centerOfMassY << "), quadrant = (" << autoRopeNode->quadrantX << ", " << autoRopeNode->quadrantY << ")" << "\n";
           deviceBhNodes[dfsIndex].autoRopeRayLocation = deviceBhNodes[ropeIndex-1].nextRayLocation;
           deviceBhNodes[dfsIndex].autoRopePrimId = deviceBhNodes[ropeIndex-1].nextPrimId;
         } else {
           deviceBhNodes[dfsIndex].autoRopeRayLocation = vec3f{0.0f, 0.0f, 0.0f};
           deviceBhNodes[dfsIndex].autoRopePrimId = 0;
-          //printf("END!\n");
         }
       } else {
         initial = 1;
@@ -245,22 +224,11 @@ void installAutoRopes(Node* root) {
           ropeStack.push(currentNode->children[i]);
         }
       }
-      // if (currentNode->se && currentNode->se->mass != 0.0f) ropeStack.push(currentNode->se);
-      // if (currentNode->sw && currentNode->sw->mass != 0.0f) ropeStack.push(currentNode->sw);
-      // if (currentNode->ne && currentNode->ne->mass != 0.0f) ropeStack.push(currentNode->ne);
-      // if (currentNode->nw && currentNode->nw->mass != 0.0f) ropeStack.push(currentNode->nw);
       iterations++;
     }
 
     printf("Max stack size: %d\n", maxStackSize);
     printf("Iterations: %d\n", iterations);
-
-}
-
-void convertToFormattedDeviceBHNodes() {
-  for(int i = 0; i < deviceBhNodes.size(); i++) {
-
-  }
 }
 
 int main(int ac, char **av) {
@@ -335,10 +303,6 @@ int main(int ac, char **av) {
       point.mass = mass;
       point.idX = launchIndex;
 
-      if(launchIndex == 0) {
-        printf("Read: mass=%f, x=%f, y=%f, z=%f, vel_x=%f, vel_y=%f, vel_z=%f\n", mass, x, y, z, velRead.x, velRead.y, velRead.z);
-      }
-
       points.push_back(point);
       primaryLaunchRays[launchIndex].pointID = launchIndex;
       primaryLaunchRays[launchIndex].primID = 0;
@@ -377,6 +341,7 @@ int main(int ac, char **av) {
                             orderedPrimaryLaunchRays.size(),orderedPrimaryLaunchRays.data());
 
   // Get the device ID
+  int deviceID;
   cudaGetDevice(&deviceID);
   LOG_OK("Device ID: " << deviceID);
 
@@ -386,7 +351,7 @@ int main(int ac, char **av) {
 
   auto scene_build_time_start = chrono::steady_clock::now();
   auto test_time_start = chrono::steady_clock::now();
-  dfsTreeSetup();
+  sceneSetup();
   auto test_time_end = chrono::steady_clock::now();
   profileStats->createSceneTime += chrono::duration_cast<chrono::microseconds>(test_time_end - test_time_start);
   
@@ -399,11 +364,8 @@ int main(int ac, char **av) {
   auto auto_ropes_end = chrono::steady_clock::now();
   profileStats->installAutoRopesTime += chrono::duration_cast<chrono::microseconds>(auto_ropes_end - auto_ropes_start);
 
-  convertToFormattedDeviceBHNodes();
-
-  OWLBuffer deviceBhNodesBuffer
-    = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),
-                            deviceBhNodes.size(),deviceBhNodes.data());
+  OWLBuffer deviceBhNodesBuffer = owlDeviceBufferCreate(context,OWL_USER_TYPE(deviceBhNodes[0]),
+                        deviceBhNodes.size(),deviceBhNodes.data());
 
   // create Triangles geomtery and create acceleration structure
   OWLVarDecl trianglesGeomVars[] = {
@@ -412,22 +374,12 @@ int main(int ac, char **av) {
     { /* sentinel to mark end of list */ }
   };
 
-  OWLGeomType trianglesGeomType
-    = owlGeomTypeCreate(context,
-                        OWL_TRIANGLES,
-                        sizeof(TrianglesGeomData),
-                        trianglesGeomVars,-1);
-
-  owlGeomTypeSetClosestHit(trianglesGeomType,0,
-                           module,"TriangleMesh");
+  OWLGeomType trianglesGeomType = owlGeomTypeCreate(context, OWL_TRIANGLES, sizeof(TrianglesGeomData), trianglesGeomVars,-1);
+  owlGeomTypeSetClosestHit(trianglesGeomType,0,module,"TriangleMesh");
   
-  OWLBuffer vertexBuffer
-    = owlDeviceBufferCreate(context, OWL_USER_TYPE(vertices[0]), vertices.size(), vertices.data());
-  OWLBuffer indexBuffer
-    = owlDeviceBufferCreate(context, OWL_USER_TYPE(indices[0]), indices.size(), indices.data());
-  
-  OWLGeom trianglesGeom
-    = owlGeomCreate(context,trianglesGeomType);
+  OWLBuffer vertexBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(vertices[0]), vertices.size(), vertices.data());
+  OWLBuffer indexBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(indices[0]), indices.size(), indices.data());
+  OWLGeom trianglesGeom = owlGeomCreate(context,trianglesGeomType);
   
   owlTrianglesSetVertices(trianglesGeom,vertexBuffer,vertices.size(),sizeof(vec3f),0);
   owlTrianglesSetIndices(trianglesGeom,indexBuffer,indices.size(),sizeof(vec3i),0);
@@ -435,11 +387,9 @@ int main(int ac, char **av) {
   owlGeomSetBuffer(trianglesGeom,"vertex",vertexBuffer);
   owlGeomSetBuffer(trianglesGeom,"index",indexBuffer);
 
-  OWLGroup trianglesGroup
-    = owlTrianglesGeomGroupCreate(context,1,&trianglesGeom);
+  OWLGroup trianglesGroup = owlTrianglesGeomGroupCreate(context,1,&trianglesGeom);
   owlGroupBuildAccel(trianglesGroup);
-  OWLGroup world
-    = owlInstanceGroupCreate(context,1,&trianglesGroup);
+  OWLGroup world = owlInstanceGroupCreate(context,1,&trianglesGroup);
   owlGroupBuildAccel(world);
 
   auto scene_build_time_end = chrono::steady_clock::now();
@@ -454,9 +404,7 @@ int main(int ac, char **av) {
     { /* sentinel to mark end of list */ }
   };
   // ----------- create object  ----------------------------
-  OWLMissProg missProg
-    = owlMissProgCreate(context,module,"miss",sizeof(MissProgData),
-                        missProgVars,-1);
+  OWLMissProg missProg = owlMissProgCreate(context,module,"miss",sizeof(MissProgData), missProgVars,-1);
 
 
   OWLVarDecl myGlobalsVars[] = {
@@ -564,7 +512,6 @@ int main(int ac, char **av) {
   profileStats->totalProgramTime += chrono::duration_cast<chrono::microseconds>(total_run_time_end - total_run_time);
 
   // free memory
-  // cudaFree(deviceOutputIntersectionData);
   // delete[] hostOutputIntersectionData;
 
   // Print Statistics
