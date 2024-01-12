@@ -14,22 +14,6 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-# cuda_compile_and_embed(ptxCode
-#   deviceCode.cu
-#   )
-
-# add_executable(sample05-rtow
-#   hostCode.cpp
-#   ${ptxCode}
-#   )
-
-# target_link_libraries(sample05-rtow
-#   ${OWL_LIBRARIES}
-#   )
-
-# add_test(sample05-rtow
-#   ${CMAKE_BINARY_DIR}/sample05-rtow)
-
 embed_ptx(
   OUTPUT_TARGET
     sample04-rohan-ptx
@@ -39,9 +23,7 @@ embed_ptx(
     deviceCode.cu
 )
 
-# include_directories("/home/shay/a/rgangar/RTX/boost/libs/multiprecision/include")
-# include_directories("/home/shay/a/rgangar/RTX/boost/libs/math/include")
-add_executable(sample04-rohan hostCode.cpp barnesHutTree.cpp bitmap.cpp)
+add_executable(sample04-rohan hostCode.cu kernels.cu barnesHutTree.cpp bitmap.cpp)
 target_link_libraries(sample04-rohan
   PRIVATE
     sample04-rohan-ptx

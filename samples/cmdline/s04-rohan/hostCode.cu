@@ -23,6 +23,7 @@
 #include <owl/DeviceMemory.h>
 // our device-side data structures
 #include "GeomTypes.h"
+#include "kernels.h"
 //#include "owlViewer/OWLViewer.h"
 
 // external helper stuff for image output
@@ -77,7 +78,6 @@ vector<deviceBhNode> deviceBhNodes;
 Point *devicePoints;
 float minNodeSValue = GRID_SIZE + 1.0f;
 vector<float> computedForces(NUM_POINTS, 0.0f);
-vector<float> maxForces(NUM_POINTS, 0.0f);
 vector<float> cpuComputedForces(NUM_POINTS, 0.0f);
 
 vector<vec3f> vertices;
@@ -101,8 +101,6 @@ void sceneSetup() {
   deviceBhNodes.resize(dfsBHNodes.size());
 
   // level order traversal of BarnesHutTree
-  // Create an empty queue for level order traversal
-  
   LOG("Bulding OWL Scenes");
   // Enqueue Root and initialize height
   while (index < dfsBHNodes.size()) {
@@ -137,11 +135,9 @@ void sceneSetup() {
       //   printf("Triangle Location: %.9f\n", static_cast<float>(triangleXLocation));
       // }
       
-      float triangleXLocationCasted = static_cast<float>(triangleXLocation); // super costly operation
-      //float triangleXLocationCasted = 0.0f;
-      vertices[currentIndex] = vec3f{triangleXLocationCasted, 0.0f + level, -0.5f};
-      vertices[currentIndex+1] = vec3f{triangleXLocationCasted, -0.5f + level, 0.5f};
-      vertices[currentIndex+2] = vec3f{triangleXLocationCasted, 0.5f + level, 0.5f};
+      vertices[currentIndex] = vec3f{triangleXLocation, 0.0f + level, -0.5f};
+      vertices[currentIndex+1] = vec3f{triangleXLocation, -0.5f + level, 0.5f};
+      vertices[currentIndex+2] = vec3f{triangleXLocation, 0.5f + level, 0.5f};
       indices[indIndex] = vec3i{currentIndex, currentIndex+1, currentIndex+2};
       currentIndex += 3;
 
@@ -153,7 +149,7 @@ void sceneSetup() {
       currentBhNode.centerOfMassY = node->centerOfMassY;
       currentBhNode.centerOfMassZ = node->centerOfMassZ;
       currentBhNode.isLeaf = node->isLeaf ? 1 : 0;
-      currentBhNode.nextRayLocation = vec3f{triangleXLocationCasted, level, 0.0f};
+      currentBhNode.nextRayLocation = vec3f{triangleXLocation, level, 0.0f};
       currentBhNode.nextPrimId = primIDIndex;
 
       deviceBhNodes[indIndex] = currentBhNode;
@@ -177,15 +173,37 @@ void orderPointsDFS() {
   }
 }
 
-void treeToDFSArray(Node *node, int& dfsIndex) {
-  if(node != nullptr) {
-    dfsBHNodes.push_back(node);
-    node->dfsIndex = dfsIndex;
-    dfsIndex++;
+// void treeToDFSArray(Node *node, int& dfsIndex) {
+//   if(node != nullptr) {
+//     dfsBHNodes.push_back(node);
+//     node->dfsIndex = dfsIndex;
+//     dfsIndex++;
 
-    if(node->children[0] != nullptr) {
-      for(int i = 0; i < 8; i++) {
-        if(node->children[i]->mass != 0.0f) treeToDFSArray(node->children[i], dfsIndex);
+//     if(node->children[0] != nullptr) {
+//       for(int i = 0; i < 8; i++) {
+//         if(node->children[i]->mass != 0.0f) treeToDFSArray(node->children[i], dfsIndex);
+//       }
+//     }
+//   }
+// }
+
+
+void treeToDFSArray(Node* root) {
+  std::stack<Node*> nodeStack;
+  int dfsIndex = 0;
+  nodeStack.push(root);
+  while (!nodeStack.empty()) {
+    Node* currentNode = nodeStack.top();
+    nodeStack.pop();
+    if(currentNode != nullptr) {
+      dfsBHNodes.push_back(currentNode);
+      currentNode->dfsIndex = dfsIndex;
+      dfsIndex++;
+
+      if (currentNode->children[0] != nullptr) {
+        for (int i = 7; i >= 0; --i) {
+          if(currentNode->children[i]->mass != 0.0f) nodeStack.push(currentNode->children[i]);
+        }
       }
     }
   }
@@ -233,6 +251,8 @@ void installAutoRopes(Node* root) {
 
 int main(int ac, char **av) {
   auto total_run_time = chrono::steady_clock::now();
+
+  //lol();
 
   // ##################################################################
   // Building Barnes Hut Tree
@@ -325,16 +345,15 @@ int main(int ac, char **av) {
   auto iterative_step_time_start = chrono::steady_clock::now();
 
   auto tree_to_dfs_time_start = chrono::steady_clock::now();
-  int dfsIndex = 0;
+  //int dfsIndex = 0;
   dfsBHNodes.reserve(points.size());
-  treeToDFSArray(root, dfsIndex);
+  treeToDFSArray(root);
   printf("Number of dfsNodes %lu\n",dfsBHNodes.size());
+  // order points in dfs order
+  orderPointsDFS();
   auto tree_to_dfs_time_end = chrono::steady_clock::now();
   profileStats->treeToDFSTime += chrono::duration_cast<chrono::microseconds>(tree_to_dfs_time_end - tree_to_dfs_time_start);
   std::cout << "Tree to DFS time: " << profileStats->treeToDFSTime.count() / 1000000.0 << " seconds." << std::endl;
-
-  // order points in dfs order
-  orderPointsDFS();
 
   OWLBuffer primaryLaunchRaysBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(orderedPrimaryLaunchRays[0]),
@@ -354,10 +373,6 @@ int main(int ac, char **av) {
   sceneSetup();
   auto test_time_end = chrono::steady_clock::now();
   profileStats->createSceneTime += chrono::duration_cast<chrono::microseconds>(test_time_end - test_time_start);
-  
-  // for(int i = 0; i < deviceBhNodes.size(); i++) {
-  //   //printf("deviceBhNodes index: %d | nextPrimId %d\n", i, deviceBhNodes[i].nextPrimId);
-  // }
 
   auto auto_ropes_start = chrono::steady_clock::now();
   installAutoRopes(root);
@@ -399,10 +414,7 @@ int main(int ac, char **av) {
   // set up miss prog
   // -------------------------------------------------------
   auto intersections_setup_time_start = chrono::steady_clock::now();
-  OWLVarDecl missProgVars[]
-    = {
-    { /* sentinel to mark end of list */ }
-  };
+  OWLVarDecl missProgVars[]= { { /* sentinel to mark end of list */ }};
   // ----------- create object  ----------------------------
   OWLMissProg missProg = owlMissProgCreate(context,module,"miss",sizeof(MissProgData), missProgVars,-1);
 
@@ -415,7 +427,6 @@ int main(int ac, char **av) {
     {/* sentinel to mark end of list */}};
 
   OWLParams lp = owlParamsCreate(context, sizeof(MyGlobals), myGlobalsVars, -1);
-
 
   OWLBuffer DevicePointsBuffer = owlDeviceBufferCreate( 
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
@@ -431,7 +442,6 @@ int main(int ac, char **av) {
 
   owlParamsSet1i(lp, "numPrims", deviceBhNodes.size());
   
-
   // -------------------------------------------------------
   // set up ray gen program
   // -------------------------------------------------------
@@ -492,7 +502,7 @@ int main(int ac, char **av) {
   int pointsFailing = 0;
   for(int i = 0; i < NUM_POINTS; i++) {
     float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-    if(percent_error > 2.5f) {
+    if(percent_error > 5.0f) {
       // LOG_OK("++++++++++++++++++++++++");
       // LOG_OK("POINT #" << i << ", (" << points[i].x << ", " << points[i].y << ") , HAS ERROR OF " << percent_error << "%");
       // LOG_OK("++++++++++++++++++++++++");

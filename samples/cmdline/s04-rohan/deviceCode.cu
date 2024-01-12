@@ -18,6 +18,7 @@
 #include <optix_device.h>
 #include "bitmap.h"
 #include <cmath>
+#include "barnesHutTree.h"
 
 using namespace owl;
 __constant__ MyGlobals optixLaunchParams;
@@ -92,7 +93,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   unsigned int p7 = __float_as_uint(r_2);                 // r_2
   //rd.hit = 0; 
   //prd.insertIndex = 0;
-  float rayLength = sqrtf(r_2) * 0.5f;
+  float rayLength = sqrtf(r_2) * THRESHOLD;
   rayLength = sqrtf(rayLength);
   //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
   //if(prd.pointID == 5382) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
@@ -126,18 +127,13 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     dy = point.y - bhNode.centerOfMassY;
     dz = point.z - bhNode.centerOfMassZ;
     r_2 = (dx * dx) + (dy * dy) + (dz * dz);
-    rayLength = sqrtf(r_2) * 0.5f;
+    rayLength = sqrtf(r_2) * THRESHOLD;
     p7 = __float_as_int(r_2);
     rayLength = sqrtf(rayLength);
 
-    //if(index == 10000) optixReorder();
-
-    //ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
     ray.tmax = rayLength;
     rayEnd = (p4 >= optixLaunchParams.numPrims || p4 == 0) ? 1 : 0;
-    //optixReorder(rayEnd, 1);
     p0 = (rayLength == 0.0f) ? 1 : 0;
-    //p3 = __float_as_uint(bhNode.mass);
     // if(prd.pointID == 8124) {
     //   IntersectionResult result;
     //   result.index = index;
