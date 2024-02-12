@@ -6,10 +6,21 @@
 
 using namespace owl;
 
-Node::Node(float x, float y, float z, float s) : quadrantX(x), quadrantY(y), quadrantZ(z), mass(0), dfsIndex(0), s(s), centerOfMassX(0), centerOfMassY(0), centerOfMassZ(0) {
+Node::Node(float x, float y, float z, float s, int pointID) {
   for(int i = 0; i < 8; i++) {
     children[i] = nullptr;
   }
+  cofm.x = x;
+  cofm.y = y;
+  cofm.z = z;
+  mass = 0.0f;
+  this->s = s;
+  quadrantX = 0.0f;
+  quadrantY = 0.0f;
+  quadrantZ = 0.0f;
+  dfsIndex = 0;
+  type = bhLeafNode;
+  this->pointID = pointID;
 }
 
 BarnesHutTree::BarnesHutTree(float theta, float gridSize) : root(nullptr), theta(theta), gridSize(gridSize) {}
@@ -18,195 +29,142 @@ BarnesHutTree::~BarnesHutTree() {
   // todo free everything
 }
 
-void BarnesHutTree::insertNode(Node* node, const Point& point) {
+void BarnesHutTree::insertNode(Node* node, const Point& point, float s) {
+  int octant = 0;
+  vec3float offset;
+	offset.x = offset.y = offset.z = 0.0f;
 
-  // base case
-  if(node->mass == 0) {
-    node->mass = point.mass;
-    node->centerOfMassX = point.x;
-    node->centerOfMassY = point.y;
-    node->centerOfMassZ = point.z;
-    node->pointID = point.idX;
+  if(node->cofm.z < point.pos.z) {
+    octant = 4;
+    offset.z = s;
+  }
+  if(node->cofm.y < point.pos.y) {
+    octant += 2;
+    offset.y = s;
+  }
+  if(node->cofm.x < point.pos.x) {
+    octant += 1;
+    offset.x = s;
+  }
+
+  //printf("Octant is ->%d\n", octant);
+  Node* child = node->children[octant];
+  
+  if(child == nullptr) {
+    Node* new_node = new Node(point.pos.x, point.pos.y, point.pos.z, s, point.idX);
+    new_node->mass = point.mass;
+    node->children[octant] = new_node;
+  } else {
+    if(child->type == bhLeafNode) {
+      // we need to split
+      float half_r = 0.5 * s;
+      node->mass += point.mass;
+      node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / (child->mass + point.mass);
+      node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / (child->mass + point.mass);
+      node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / (child->mass + point.mass);
+      Node* new_inner_node = new Node((node->cofm.x - half_r) + offset.x, (node->cofm.y - half_r) + offset.y, (node->cofm.z - half_r) + offset.z, half_r, -1);
+      new_inner_node->type = bhNonLeafNode;
+
+      BarnesHutTree::insertNode(new_inner_node, point, half_r);
+      Point childPoint;
+      childPoint.pos.x = child->cofm.x;
+      childPoint.pos.y = child->cofm.y;
+      childPoint.pos.z = child->cofm.z;
+      childPoint.mass = child->mass;
+      childPoint.idX = child->pointID;
+      BarnesHutTree::insertNode(new_inner_node, childPoint, half_r);
+
+      new_inner_node->mass = child->mass + point.mass;
+      new_inner_node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / new_inner_node->mass;
+      new_inner_node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / new_inner_node->mass;
+      new_inner_node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / new_inner_node->mass;
+			node->children[octant] = new_inner_node;
+    } else {
+      float half_r = 0.5 * s;
+      node->mass += point.mass;
+      node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / (child->mass + point.mass);
+      node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / (child->mass + point.mass);
+      node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / (child->mass + point.mass);
+      BarnesHutTree::insertNode(child, point, half_r);
+    }
+  }
+}
+
+void BarnesHutTree::compute_center_of_mass(Node *root) {
+	int i = 0;
+	int j = 0;
+	float mass;
+  vec3float cofm;
+	vec3float cofm_child;
+	Node* child;
+
+	mass = 0.0;
+	cofm.x = 0.0;
+	cofm.y = 0.0; 
+	cofm.z = 0.0;
+
+	for (i = 0; i < 8; i++) {
+		child = root->children[i];
+		if (child != nullptr) {
+			// compact child nodes for speed
+			if (i != j) {
+				root->children[j] = root->children[i];
+				root->children[i] = 0;
+			}
+
+			j++;
+
+			// If non leave node need to traverse children:
+			if (child->type == bhNonLeafNode) {
+				// summarize children
+				compute_center_of_mass(child);
+			} else {
+				//*(points_sorted[sortidx++]) = child; // insert this point in sorted order
+			}
+
+			mass += child->mass;
+
+			cofm_child.x = child->cofm.x * child->mass; // r*m
+			cofm_child.y = child->cofm.y * child->mass; // r*m
+			cofm_child.z = child->cofm.z * child->mass; // r*m
+
+			cofm.x = cofm.x + cofm_child.x;
+			cofm.y = cofm.y + cofm_child.y;
+			cofm.z = cofm.z + cofm_child.z;
+		}
+	}
+
+	cofm.x = cofm.x  * (1.0 / mass);
+	cofm.y = cofm.y  * (1.0 / mass);
+	cofm.z = cofm.z  * (1.0 / mass);
+
+	root->cofm = cofm;
+	root->mass = mass;
+}
+
+void BarnesHutTree::printTree(Node* node, int depth = 0) {
+  if(node == nullptr) {
     return;
   }
 
-  if(node->children[0] == nullptr) {
-    splitNode(node);
+  // Print indentation based on depth
+  for (int i = 0; i < depth; ++i) {
+      std::cout << "  ";
   }
 
-  // children order
-  // 0 -> sw and back face
-  // 1 -> nw and back face
-  // 2 -> se and back face
-  // 3 -> ne and back face
-  // 4 -> sw and front face
-  // 5 -> nw and front face
-  // 6 -> se and front face
-  // 7 -> ne and front face
+  std::cout << "└─ ";
 
-  // determine quadrant to place point
-  if(point.z < node->quadrantZ) {
-    if(point.x < node->quadrantX) {
-      if(point.y < node->quadrantY) {
-        BarnesHutTree::insertNode(node->children[0], point);
-      } else {
-        BarnesHutTree::insertNode(node->children[1], point);
-      }
-    } else {
-      if(point.y < node->quadrantY) {
-        BarnesHutTree::insertNode(node->children[2], point);
-      } else {
-        BarnesHutTree::insertNode(node->children[3], point);
-      }
-    }
-  } else {
-    if(point.x < node->quadrantX) {
-      if(point.y < node->quadrantY) {
-        BarnesHutTree::insertNode(node->children[4], point);
-      } else {
-        BarnesHutTree::insertNode(node->children[5], point);
-      }
-    } else {
-      if(point.y < node->quadrantY) {
-        BarnesHutTree::insertNode(node->children[6], point);
-      } else {
-        BarnesHutTree::insertNode(node->children[7], point);
-      }
-    }
+  printf("Node: Mass = %f, Center of Mass = (%f, %f, %f)\n", node->mass, node->cofm.x, node->cofm.y, node->cofm.z);
+  for(int i = 0; i < 8; i++) {
+    printTree(node->children[i], depth + 1);
   }
-
-  // update total mass and center of mass
-  node->centerOfMassX = ((node->mass * node->centerOfMassX) + (point.mass * point.x)) / (node->mass + point.mass);
-  node->centerOfMassY = ((node->mass * node->centerOfMassY) + (point.mass * point.y)) / (node->mass + point.mass);
-  node->centerOfMassZ = ((node->mass * node->centerOfMassZ) + (point.mass * point.z)) / (node->mass + point.mass);
-  node->mass += point.mass;
-}
-
-void BarnesHutTree::splitNode(Node* node) {
-  float x = node->quadrantX;
-  float y = node->quadrantY;
-  float z = node->quadrantZ;
-  float s = node->s / 2.0;
-  float quadrantOperand = s / 2.0;
-
-  // children order
-  // 0 -> sw and back face
-  // 1 -> nw and back face
-  // 2 -> se and back face
-  // 3 -> ne and back face
-  // 4 -> sw and front face
-  // 5 -> nw and front face
-  // 6 -> se and front face
-  // 7 -> ne and front face
-  
-  node->children[0] = new Node(x - quadrantOperand, y + quadrantOperand, z - quadrantOperand, s);
-  node->children[1] = new Node(x - quadrantOperand, y - quadrantOperand, z - quadrantOperand, s);
-  node->children[2] = new Node(x + quadrantOperand, y + quadrantOperand, z - quadrantOperand, s);
-  node->children[3] = new Node(x + quadrantOperand, y - quadrantOperand, z - quadrantOperand, s);
-  node->children[4] = new Node(x - quadrantOperand, y + quadrantOperand, z + quadrantOperand, s);
-  node->children[5] = new Node(x - quadrantOperand, y - quadrantOperand, z + quadrantOperand, s);
-  node->children[6] = new Node(x + quadrantOperand, y + quadrantOperand, z + quadrantOperand, s);
-  node->children[7] = new Node(x + quadrantOperand, y - quadrantOperand, z + quadrantOperand, s);
-
-  // node->nw = new Node(x - quadrantOperand, y + quadrantOperand, s);
-  // node->ne = new Node(x + quadrantOperand, y + quadrantOperand, s);
-  // node->sw = new Node(x - quadrantOperand, y - quadrantOperand, s);
-  // node->se = new Node(x + quadrantOperand, y - quadrantOperand, s);
-
-  if(node->centerOfMassZ < node->quadrantZ) {
-    if(node->centerOfMassX < node->quadrantX) {
-      if(node->centerOfMassY < node->quadrantY) {
-        node->children[0]->mass = node->mass;
-        node->children[0]->centerOfMassX = node->centerOfMassX;
-        node->children[0]->centerOfMassY = node->centerOfMassY;
-        node->children[0]->centerOfMassZ = node->centerOfMassZ;
-        node->children[0]->pointID = node->pointID;
-      } else {
-        node->children[1]->mass = node->mass;
-        node->children[1]->centerOfMassX = node->centerOfMassX;
-        node->children[1]->centerOfMassY = node->centerOfMassY;
-        node->children[1]->centerOfMassZ = node->centerOfMassZ;
-        node->children[1]->pointID = node->pointID;
-      }
-    } else {
-      if(node->centerOfMassY < node->quadrantY) {
-        node->children[2]->mass = node->mass;
-        node->children[2]->centerOfMassX = node->centerOfMassX;
-        node->children[2]->centerOfMassY = node->centerOfMassY;
-        node->children[2]->centerOfMassZ = node->centerOfMassZ;
-        node->children[2]->pointID = node->pointID;
-      } else {
-        node->children[3]->mass = node->mass;
-        node->children[3]->centerOfMassX = node->centerOfMassX;
-        node->children[3]->centerOfMassY = node->centerOfMassY;
-        node->children[3]->centerOfMassZ = node->centerOfMassZ;
-        node->children[3]->pointID = node->pointID;
-      }
-    }
-  } else {
-    if(node->centerOfMassX < node->quadrantX) {
-      if(node->centerOfMassY < node->quadrantY) {
-        node->children[4]->mass = node->mass;
-        node->children[4]->centerOfMassX = node->centerOfMassX;
-        node->children[4]->centerOfMassY = node->centerOfMassY;
-        node->children[4]->centerOfMassZ = node->centerOfMassZ;
-        node->children[4]->pointID = node->pointID;
-      } else {
-        node->children[5]->mass = node->mass;
-        node->children[5]->centerOfMassX = node->centerOfMassX;
-        node->children[5]->centerOfMassY = node->centerOfMassY;
-        node->children[5]->centerOfMassZ = node->centerOfMassZ;
-        node->children[5]->pointID = node->pointID;
-      }
-    } else {
-      if(node->centerOfMassY < node->quadrantY) {
-        node->children[6]->mass = node->mass;
-        node->children[6]->centerOfMassX = node->centerOfMassX;
-        node->children[6]->centerOfMassY = node->centerOfMassY;
-        node->children[6]->centerOfMassZ = node->centerOfMassZ;
-        node->children[6]->pointID = node->pointID;
-      } else {
-        node->children[7]->mass = node->mass;
-        node->children[7]->centerOfMassX = node->centerOfMassX;
-        node->children[7]->centerOfMassY = node->centerOfMassY;
-        node->children[7]->centerOfMassZ = node->centerOfMassZ;
-        node->children[7]->pointID = node->pointID;
-      }
-    }
-  }
-  
-}
-
-void BarnesHutTree::printTree(Node* node, int depth = 0, std::string corner = "none") {
-    if (node == nullptr) {
-        return;
-    }
-
-    // Print indentation based on depth
-    for (int i = 0; i < depth; ++i) {
-        std::cout << "  ";
-    }
-
-    std::cout << "└─ ";
-
-    // Print node information
-    std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << "), quadrant = (" << node->quadrantX << ", " << node->quadrantY << "), corner = " << corner << "\n";
-
-    // Recursively print child nodes
-    for(int i = 0; i < 8; i++) {
-      printTree(node->children[i], depth + 1, "none");
-    }
-    // printTree(node->nw, depth + 1, "nw");
-    // printTree(node->ne, depth + 1, "ne");
-    // printTree(node->sw, depth + 1, "sw");
-    // printTree(node->se, depth + 1, "se");
 }
 
 float distanceBetweenObjects(Point point, Node *bhNode) {
   // distance calculation
-  float dx = point.x - bhNode->centerOfMassX;
-  float dy = point.y - bhNode->centerOfMassY;
-  float dz = point.z - bhNode->centerOfMassZ;
+  float dx = point.pos.x - bhNode->cofm.x;
+  float dy = point.pos.y - bhNode->cofm.y;
+  float dz = point.pos.z - bhNode->cofm.z;
   float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
 
   return std::sqrt(r_2);
@@ -217,9 +175,9 @@ float computeObjectsAttractionForce(Point point, Node *bhNode) {
   float mass_two = bhNode->mass;
 
   // distance calculation
-  float dx = point.x - bhNode->centerOfMassX;
-  float dy = point.y - bhNode->centerOfMassY;
-  float dz = point.z - bhNode->centerOfMassZ;
+  float dx = point.pos.x - bhNode->cofm.x;
+  float dy = point.pos.y - bhNode->cofm.y;
+  float dz = point.pos.z - bhNode->cofm.z;
   float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
   float result = (((mass_one * mass_two) / r_2) * GRAVITATIONAL_CONSTANT);
 
@@ -230,7 +188,7 @@ float computeObjectsAttractionForce(Point point, Node *bhNode) {
 float force_on(Point point, Node* node) {
   if(node->children[0] == nullptr) {
     //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
-    if((node->mass != 0.0f) && ((point.x != node->centerOfMassX) || (point.y != node->centerOfMassY) || (point.z != node->centerOfMassZ))) {
+    if((node->mass != 0.0f) && ((point.pos.x != node->cofm.x) || (point.pos.y != node->cofm.y) || (point.pos.z != node->cofm.z))) {
       //if(point.idX == 5382) printf("Intersected leaf at node with mass! ->%f\n", node->mass);
       return computeObjectsAttractionForce(point, node);
     } else {
@@ -246,12 +204,10 @@ float force_on(Point point, Node* node) {
 
   float totalForce = 0;
   for(int i = 0; i < 8; i++) {
-    totalForce += force_on(point, node->children[i]);
+    if(node->children[i] != nullptr) {
+      totalForce += force_on(point, node->children[i]);
+    }
   }
-  // totalForce += force_on(point, node->nw);
-  // totalForce += force_on(point, node->ne);
-  // totalForce += force_on(point, node->sw);
-  // totalForce += force_on(point, node->se);
 
   return totalForce;
 }

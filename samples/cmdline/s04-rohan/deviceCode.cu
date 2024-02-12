@@ -28,9 +28,6 @@ __constant__ MyGlobals optixLaunchParams;
 
 OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 {
-  //const TrianglesGeomData &self = owl::getProgramData<TrianglesGeomData>();
-  //const int primID = optixGetPrimitiveIndex();
-
   // compute force between point and bhNode
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
   float totalMass = __uint_as_float(optixGetPayload_1());
@@ -40,13 +37,10 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
   optixSetPayload_4(bhNode.autoRopePrimId);
   optixSetPayload_5(__float_as_uint(bhNode.autoRopeRayLocation.x));
   optixSetPayload_6(__float_as_uint(bhNode.autoRopeRayLocation.y));
-  //if(prd.pointID == 5382) printf("Approximated at node with mass! ->%f\n", bhNode.mass);
 }
 
 OPTIX_MISS_PROGRAM(miss)()
 {
-  //const MissProgData &self = owl::getProgramData<MissProgData>();
-  //PerRayData &prd = owl::getPRD<PerRayData>();
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
   float totalMass = __uint_as_float(optixGetPayload_1());
   float currentMass = 0.0f;
@@ -54,15 +48,10 @@ OPTIX_MISS_PROGRAM(miss)()
   if(bhNode.isLeaf == 1 && optixGetPayload_0() == 0) {
     currentMass = (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * .0001f;
     optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
-    //prd.mass += (((__uint_as_float(optixGetPayload_2()) * __uint_as_float(optixGetPayload_3()))) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
-    //if(prd.pointID == 5382) printf("Intersected leaf at node with mass! ->%f\n", bhNode.mass);
   } 
   optixSetPayload_4(bhNode.nextPrimId);
   optixSetPayload_5(__float_as_uint(bhNode.nextRayLocation.x));
   optixSetPayload_6(__float_as_uint(bhNode.nextRayLocation.y));
-
-  //printf("Ray distance %f.\n", prd.r_2);
-
 }
 
 OPTIX_RAYGEN_PROGRAM(rayGen)()
@@ -75,9 +64,9 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[currentRay.primID];
 
   // Calculate distance between point and bh node
-  float dx = fabs(point.x - bhNode.centerOfMassX);
-  float dy = fabs(point.y - bhNode.centerOfMassY);
-  float dz = fabs(point.z - bhNode.centerOfMassZ);
+  float dx = fabs(point.pos.x - bhNode.centerOfMassX);
+  float dy = fabs(point.pos.y - bhNode.centerOfMassY);
+  float dz = fabs(point.pos.z - bhNode.centerOfMassZ);
 
   int pointID = currentRay.pointID;
   float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
@@ -91,17 +80,14 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   unsigned int p5 = __float_as_uint(currentRay.orgin.x);  // rayOrigin.x
   unsigned int p6 = __float_as_uint(currentRay.orgin.y);  // rayOrigin.y
   unsigned int p7 = __float_as_uint(r_2);                 // r_2
-  //rd.hit = 0; 
-  //prd.insertIndex = 0;
+
   float rayLength = sqrtf(r_2) * THRESHOLD;
   rayLength = sqrtf(rayLength);
-  //if(prd.pointID == 0) printf("Num prims %d\n", optixLaunchParams.numPrims);
-  //if(prd.pointID == 5382) printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f\n", 0, prd.primID, bhNode.mass, rayLength);
 
-  int index = 0;
   // Launch rays
   owl::Ray ray(currentRay.orgin, vec3f(1,0,0), 0, rayLength);
   while(rayEnd == 0) {
+    //
     optixTraverse(self.world,
                (const float3&)ray.origin,
                (const float3&)ray.direction,
@@ -123,9 +109,9 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     ray.origin = vec3f(__uint_as_float(p5), __uint_as_float(p6), 0.0f);
     p3 = __float_as_uint(bhNode.mass);
 
-    dx = point.x - bhNode.centerOfMassX;
-    dy = point.y - bhNode.centerOfMassY;
-    dz = point.z - bhNode.centerOfMassZ;
+    dx = point.pos.x - bhNode.centerOfMassX;
+    dy = point.pos.y - bhNode.centerOfMassY;
+    dz = point.pos.z - bhNode.centerOfMassZ;
     r_2 = (dx * dx) + (dy * dy) + (dz * dz);
     rayLength = sqrtf(r_2) * THRESHOLD;
     p7 = __float_as_int(r_2);
@@ -134,22 +120,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     ray.tmax = rayLength;
     rayEnd = (p4 >= optixLaunchParams.numPrims || p4 == 0) ? 1 : 0;
     p0 = (rayLength == 0.0f) ? 1 : 0;
-    // if(prd.pointID == 8124) {
-    //   IntersectionResult result;
-    //   result.index = index;
-    //   result.primID = prd.primID;
-    //   result.mass = bhNode.mass;
-    //   result.rayLength = rayLength;
-    //   //result.didIntersect = 1;
-    //   prd.result = result;
-    //   //optixLaunchParams.intersectionResults[prd.index] = result;
-    // }
-    // if(prd.pointID == 5382) {
-    //   //printf("Index: %d | PrimID: %d | Mass: %f | rayLength: %f | Origin: (%f, %f)\n", index, prd.primID, bhNode.mass, rayLength, ray.origin.x, ray.origin.y);
-    // }
-    //break;
     //optixReorder(rayEnd, 1);
-    index++;
   }
   optixLaunchParams.computedForces[pointID] = __uint_as_float(p1);
 }

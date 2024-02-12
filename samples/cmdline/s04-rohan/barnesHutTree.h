@@ -7,58 +7,54 @@
 #define GRID_SIZE 10000.0f // this has to be smaller than the TRIANGLEX_THRESHOLD in hostCode.cpp
 #define THRESHOLD 0.6f
 #define GRAVITATIONAL_CONSTANT .0001f
-#define MAX_POINTS_PER_LEAF 32
 
 using namespace std;
 
-namespace owl {
+typedef enum _bh_node_type {
+	bhLeafNode,
+	bhNonLeafNode
+} bh_node_type;
 
-  struct Point {
+namespace owl {
+  typedef struct _vec3f {
     float x;
     float y;
     float z;
-    float vel_x;
-    float vel_y;
-    float vel_z;
+  } vec3float;
+
+  struct Point {
+    vec3float pos;
+    vec3float vel;
     float mass;
     int idX;
   };
 
-
   struct Node {
+    bh_node_type type;
     float quadrantX;
     float quadrantY;
     float quadrantZ;
     float mass;
     float s;
-    // uint8_t numPoints;
-    // int pointsIdx[MAX_POINTS_PER_LEAF];
-    float centerOfMassX;
-    float centerOfMassY;
-    float centerOfMassZ;
+    vec3float cofm;
     Node* children[8];
-    // Node* nw;
-    // Node* ne;
-    // Node* sw;
-    // Node* se;
-    bool isLeaf;
     int pointID;
     uint32_t dfsIndex;
 
-    Node(float x, float y, float z, float s);
+    Node(float x, float y, float z, float s, int pointID);
 
     Node() {
-      mass = 0;
-      s = 0;
-      centerOfMassX = 0;
-      centerOfMassY = 0;
-      centerOfMassZ = 0;
+      mass = 0.0f;
+      s = 0.0f;
+      cofm.x = 0.0f;
+      cofm.y = 0.0f;
+      cofm.z = 0.0f;
       dfsIndex = 0;
       for(int i = 0; i < 8; i++) {
         children[i] = nullptr;
       }
-      isLeaf = false;
-      pointID = 0;
+      type = bhLeafNode;
+      pointID = -1;
     }
 
   };
@@ -69,15 +65,15 @@ namespace owl {
       float theta;
       float gridSize;
 
-      void splitNode(Node* node);
       //void calculateCenterOfMass(Node* node);
 
     public:
       BarnesHutTree(float theta, float gridSize);
       ~BarnesHutTree();
 
-      void insertNode(Node* node, const Point& point);
-      void printTree(Node* root, int depth, std::string corner);
+      void insertNode(Node* node, const Point& point, float s);
+      void compute_center_of_mass(Node *root);
+      void printTree(Node* root, int depth);
       void computeForces(Node* node, std::vector<Point> points, std::vector<float>& cpuComputedForces);
       //void calculateCenterOfMass();
   };

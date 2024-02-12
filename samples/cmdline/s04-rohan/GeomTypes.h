@@ -21,89 +21,76 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 10000000;
+constexpr int NUM_POINTS = 50;
 constexpr int NUM_STEPS = 1;
 
 using namespace owl;
 using namespace std;
 
-  struct deviceBhNode {
-    float mass;
-    float s;
-    float centerOfMassX;
-    float centerOfMassY;
-    float centerOfMassZ;
-    vec3f nextRayLocation;
-    int nextPrimId;
-    vec3f autoRopeRayLocation;
-    int autoRopePrimId;
-    uint8_t isLeaf;
-  };
+struct deviceBhNode {
+  float mass;
+  float s;
+  float centerOfMassX;
+  float centerOfMassY;
+  float centerOfMassZ;
+  vec3f nextRayLocation;
+  int nextPrimId;
+  vec3f autoRopeRayLocation;
+  int autoRopePrimId;
+  uint8_t isLeaf;
+};
 
-  struct formattedDeviceBhNode {
-    float* mass;
-    float* s;
-    float* centerOfMassX;
-    float* centerOfMassY;
-    vec3f* nextRayLocation;
-    int* nextPrimId;
-    vec3f* autoRopeRayLocation;
-    int* autoRopePrimId;
-    uint8_t* isLeaf;
-  };
+/* variables for the triangle mesh geometry */
+struct TrianglesGeomData
+{
+  /*! array/buffer of vertex indices */
+  vec3i *index;
+  /*! array/buffer of vertex positions */
+  vec3f *vertex;
+};
 
-  /* variables for the triangle mesh geometry */
-  struct TrianglesGeomData
-  {
-    /*! array/buffer of vertex indices */
-    vec3i *index;
-    /*! array/buffer of vertex positions */
-    vec3f *vertex;
-  };
+struct CustomRay 
+{
+  vec3f orgin;
+  int primID;
+  int pointID;
+};
 
-  struct CustomRay 
-  {
-    vec3f orgin;
-    int primID;
-    int pointID;
-  };
+/* variables for the ray generation program */
+struct RayGenData
+{
+  OptixTraversableHandle world;
+  CustomRay *primaryLaunchRays;
+};
 
-  /* variables for the ray generation program */
-  struct RayGenData
-  {
-    OptixTraversableHandle world;
-    CustomRay *primaryLaunchRays;
-  };
+/* variables for the miss program */
+struct MissProgData
+{
+};
 
-  /* variables for the miss program */
-  struct MissProgData
-  {
-  };
+struct MyGlobals 
+{	
+  deviceBhNode *deviceBhNodes;
+  Point *devicePoints;
+  int numPrims;
+  float *computedForces;
+};
 
-	struct MyGlobals 
-	{	
-    deviceBhNode *deviceBhNodes;
-    Point *devicePoints;
-    int numPrims;
-    float *computedForces;
-	};
+struct ProfileStatistics {
+  chrono::microseconds intersectionsTime;
+  chrono::microseconds sceneBuildTime;
+  chrono::microseconds totalProgramTime;
+  chrono::microseconds treeBuildTime;
+  chrono::microseconds treeToDFSTime;
+  chrono::microseconds installAutoRopesTime;
+  chrono::microseconds createSceneTime;
+  chrono::microseconds forceCalculationTime;
+  chrono::microseconds cpuForceCalculationTime;
+  chrono::microseconds intersectionsSetupTime;
+  chrono::microseconds treePathsRecrusiveSetupTime;
+  chrono::microseconds iterativeStepTime;
 
-  struct ProfileStatistics {
-    chrono::microseconds intersectionsTime;
-    chrono::microseconds sceneBuildTime;
-    chrono::microseconds totalProgramTime;
-    chrono::microseconds treeBuildTime;
-    chrono::microseconds treeToDFSTime;
-    chrono::microseconds installAutoRopesTime;
-    chrono::microseconds createSceneTime;
-    chrono::microseconds forceCalculationTime;
-    chrono::microseconds cpuForceCalculationTime;
-    chrono::microseconds intersectionsSetupTime;
-    chrono::microseconds treePathsRecrusiveSetupTime;
-    chrono::microseconds iterativeStepTime;
-
-    ProfileStatistics() : intersectionsTime(0), sceneBuildTime(0), totalProgramTime(0), treeBuildTime(0), forceCalculationTime(0), cpuForceCalculationTime(0), 
-    intersectionsSetupTime(0) {}
-
-  };
+  ProfileStatistics() : intersectionsTime(0), sceneBuildTime(0), totalProgramTime(0), treeBuildTime(0), forceCalculationTime(0), cpuForceCalculationTime(0), 
+  intersectionsSetupTime(0) {}
+};
 
