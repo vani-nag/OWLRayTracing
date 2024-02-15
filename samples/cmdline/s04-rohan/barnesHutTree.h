@@ -24,7 +24,7 @@ namespace owl {
 
   struct Point {
     vec3float pos;
-    vec3float vel;
+    //vec3float vel;
     float mass;
     int idX;
   };
@@ -72,7 +72,7 @@ namespace owl {
       ~BarnesHutTree();
 
       void insertNode(Node* node, const Point& point, float s);
-      void compute_center_of_mass(Node *root);
+      void computeCOM(Node *root);
       void printTree(Node* root, int depth);
       void computeForces(Node* node, std::vector<Point> points, std::vector<float>& cpuComputedForces);
       //void calculateCenterOfMass();

@@ -21,7 +21,7 @@
 #include <vector>
 #include <chrono>
 
-constexpr int NUM_POINTS = 50;
+constexpr int NUM_POINTS = 10;
 constexpr int NUM_STEPS = 1;
 
 using namespace owl;
@@ -29,13 +29,14 @@ using namespace std;
 
 struct deviceBhNode {
   float mass;
-  float s;
   float centerOfMassX;
   float centerOfMassY;
   float centerOfMassZ;
-  vec3f nextRayLocation;
+  float nextRayLocation_x;
+  float nextRayLocation_y;
   int nextPrimId;
-  vec3f autoRopeRayLocation;
+  float autoRopeRayLocation_x;
+  float autoRopeRayLocation_y;
   int autoRopePrimId;
   uint8_t isLeaf;
 };

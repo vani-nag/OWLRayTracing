@@ -58,10 +58,6 @@ void BarnesHutTree::insertNode(Node* node, const Point& point, float s) {
     if(child->type == bhLeafNode) {
       // we need to split
       float half_r = 0.5 * s;
-      node->mass += point.mass;
-      node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / (child->mass + point.mass);
-      node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / (child->mass + point.mass);
-      node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / (child->mass + point.mass);
       Node* new_inner_node = new Node((node->cofm.x - half_r) + offset.x, (node->cofm.y - half_r) + offset.y, (node->cofm.z - half_r) + offset.z, half_r, -1);
       new_inner_node->type = bhNonLeafNode;
 
@@ -74,73 +70,92 @@ void BarnesHutTree::insertNode(Node* node, const Point& point, float s) {
       childPoint.idX = child->pointID;
       BarnesHutTree::insertNode(new_inner_node, childPoint, half_r);
 
-      new_inner_node->mass = child->mass + point.mass;
-      new_inner_node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / new_inner_node->mass;
-      new_inner_node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / new_inner_node->mass;
-      new_inner_node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / new_inner_node->mass;
 			node->children[octant] = new_inner_node;
     } else {
       float half_r = 0.5 * s;
-      node->mass += point.mass;
-      node->cofm.x = (child->cofm.x * child->mass + point.pos.x * point.mass) / (child->mass + point.mass);
-      node->cofm.y = (child->cofm.y * child->mass + point.pos.y * point.mass) / (child->mass + point.mass);
-      node->cofm.z = (child->cofm.z * child->mass + point.pos.z * point.mass) / (child->mass + point.mass);
       BarnesHutTree::insertNode(child, point, half_r);
     }
   }
 }
 
-void BarnesHutTree::compute_center_of_mass(Node *root) {
-	int i = 0;
-	int j = 0;
-	float mass;
-  vec3float cofm;
-	vec3float cofm_child;
-	Node* child;
+// Function to recursively compute the center of mass and total mass
+void BarnesHutTree::computeCOM(Node* node) {
+    if (node->type == bhNonLeafNode) {
+        float totalMass = 0.0f;
+        float cofm_x = 0.0f;
+        float cofm_y = 0.0f;
+        float cofm_z = 0.0f;
 
-	mass = 0.0;
-	cofm.x = 0.0;
-	cofm.y = 0.0; 
-	cofm.z = 0.0;
+        for (int i = 0; i < 8; ++i) {
+            if (node->children[i] != nullptr) {
+                computeCOM(node->children[i]);
+                totalMass += node->children[i]->mass;
+                cofm_x += node->children[i]->cofm.x * node->children[i]->mass;
+                cofm_y += node->children[i]->cofm.y * node->children[i]->mass;
+                cofm_z += node->children[i]->cofm.z * node->children[i]->mass;
+            }
+        }
 
-	for (i = 0; i < 8; i++) {
-		child = root->children[i];
-		if (child != nullptr) {
-			// compact child nodes for speed
-			if (i != j) {
-				root->children[j] = root->children[i];
-				root->children[i] = 0;
-			}
-
-			j++;
-
-			// If non leave node need to traverse children:
-			if (child->type == bhNonLeafNode) {
-				// summarize children
-				compute_center_of_mass(child);
-			} else {
-				//*(points_sorted[sortidx++]) = child; // insert this point in sorted order
-			}
-
-			mass += child->mass;
-
-			cofm_child.x = child->cofm.x * child->mass; // r*m
-			cofm_child.y = child->cofm.y * child->mass; // r*m
-			cofm_child.z = child->cofm.z * child->mass; // r*m
-
-			cofm.x = cofm.x + cofm_child.x;
-			cofm.y = cofm.y + cofm_child.y;
-			cofm.z = cofm.z + cofm_child.z;
-		}
-	}
-
-	cofm.x = cofm.x  * (1.0 / mass);
-	cofm.y = cofm.y  * (1.0 / mass);
-	cofm.z = cofm.z  * (1.0 / mass);
-
-	root->cofm = cofm;
-	root->mass = mass;
+        if (totalMass != 0) {
+            node->mass = totalMass;
+            node->cofm.x = cofm_x / totalMass;
+            node->cofm.y = cofm_y / totalMass;
+            node->cofm.z = cofm_z / totalMass;
+        }
+    }
 }
+
+// void BarnesHutTree::compute_center_of_mass(Node *root) {
+// 	int i = 0;
+// 	int j = 0;
+// 	float mass;
+//   vec3float cofm;
+// 	vec3float cofm_child;
+// 	Node* child;
+
+// 	mass = 0.0;
+// 	cofm.x = 0.0;
+// 	cofm.y = 0.0; 
+// 	cofm.z = 0.0;
+
+// 	for (i = 0; i < 8; i++) {
+// 		child = root->children[i];
+// 		if (child != nullptr) {
+// 			// compact child nodes for speed
+// 			if (i != j) {
+// 				root->children[j] = root->children[i];
+// 				root->children[i] = 0;
+// 			}
+
+// 			j++;
+
+// 			// If non leave node need to traverse children:
+// 			if (child->type == bhNonLeafNode) {
+// 				// summarize children
+// 				compute_center_of_mass(child);
+// 			} else {
+// 				//*(points_sorted[sortidx++]) = child; // insert this point in sorted order
+// 			}
+
+// 			mass += child->mass;
+
+// 			cofm_child.x = child->cofm.x * child->mass; // r*m
+// 			cofm_child.y = child->cofm.y * child->mass; // r*m
+// 			cofm_child.z = child->cofm.z * child->mass; // r*m
+
+// 			cofm.x = cofm.x + cofm_child.x;
+// 			cofm.y = cofm.y + cofm_child.y;
+// 			cofm.z = cofm.z + cofm_child.z;
+// 		}
+// 	}
+
+// 	cofm.x = cofm.x  * (1.0 / mass);
+// 	cofm.y = cofm.y  * (1.0 / mass);
+// 	cofm.z = cofm.z  * (1.0 / mass);
+
+// 	root->cofm = cofm;
+// 	root->mass = mass;
+// }
 
 void BarnesHutTree::printTree(Node* node, int depth = 0) {
   if(node == nullptr) {
@@ -186,7 +201,7 @@ float computeObjectsAttractionForce(Point point, Node *bhNode) {
 }
  
 float force_on(Point point, Node* node) {
-  if(node->children[0] == nullptr) {
+  if(node->type == bhLeafNode) {
     //std::cout << "Node: Mass = " << node->mass << ", Center of Mass = (" << node->centerOfMassX << ", " << node->centerOfMassY << ")\n";
     if((node->mass != 0.0f) && ((point.pos.x != node->cofm.x) || (point.pos.y != node->cofm.y) || (point.pos.z != node->cofm.z))) {
       //if(point.idX == 5382) printf("Intersected leaf at node with mass! ->%f\n", node->mass);

@@ -35,8 +35,8 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 
   optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
   optixSetPayload_4(bhNode.autoRopePrimId);
-  optixSetPayload_5(__float_as_uint(bhNode.autoRopeRayLocation.x));
-  optixSetPayload_6(__float_as_uint(bhNode.autoRopeRayLocation.y));
+  optixSetPayload_5(__float_as_uint(bhNode.autoRopeRayLocation_x));
+  optixSetPayload_6(__float_as_uint(bhNode.autoRopeRayLocation_y));
 }
 
 OPTIX_MISS_PROGRAM(miss)()
@@ -50,8 +50,8 @@ OPTIX_MISS_PROGRAM(miss)()
     optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
   } 
   optixSetPayload_4(bhNode.nextPrimId);
-  optixSetPayload_5(__float_as_uint(bhNode.nextRayLocation.x));
-  optixSetPayload_6(__float_as_uint(bhNode.nextRayLocation.y));
+  optixSetPayload_5(__float_as_uint(bhNode.nextRayLocation_x));
+  optixSetPayload_6(__float_as_uint(bhNode.nextRayLocation_y));
 }
 
 OPTIX_RAYGEN_PROGRAM(rayGen)()
