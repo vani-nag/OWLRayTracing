@@ -29,6 +29,7 @@ __constant__ MyGlobals optixLaunchParams;
 OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 {
   // compute force between point and bhNode
+  printf("Hit!\n");
   int pointID = optixGetPayload_3();
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
   float currentComputedForce = __uint_as_float(optixGetPayload_1());
@@ -46,7 +47,7 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
       }
     }
   } else {
-    currentComputedForce += ((optixLaunchParams.devicePoints[pointID].mass * bhNode.mass) / __uint_as_float(optixGetPayload_7())) * .0001f;
+    currentComputedForce += ((__uint_as_float(optixGetPayload_2()) * bhNode.mass) / __uint_as_float(optixGetPayload_7())) * .0001f;
   }
 
   optixSetPayload_1(__float_as_uint((currentComputedForce)));
@@ -58,24 +59,12 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
 OPTIX_MISS_PROGRAM(miss)()
 {
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[optixGetPayload_4()];
-  float currentComputedForce = __uint_as_float(optixGetPayload_1());
+  float totalMass = __uint_as_float(optixGetPayload_1());
   float currentMass = 0.0f;
-  int pointID = optixGetPayload_3();
-
+  
   if(bhNode.isLeaf == 1 && optixGetPayload_0() == 0) {
-     for(int i = 0; i < bhNode.numParticles; i++) {
-      int particleID = bhNode.particles[i];
-      if(particleID != pointID) {
-        Point point = optixLaunchParams.devicePoints[particleID];
-        float dx = fabs(point.pos.x - optixLaunchParams.devicePoints[pointID].pos.x);
-        float dy = fabs(point.pos.y - optixLaunchParams.devicePoints[pointID].pos.y);
-        float dz = fabs(point.pos.z - optixLaunchParams.devicePoints[pointID].pos.z);
-        float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
-        float force = ((point.mass * optixLaunchParams.devicePoints[pointID].mass) / r_2) * .0001f;
-        currentComputedForce += force;
-      }
-    }
-    optixSetPayload_1(__float_as_uint((currentComputedForce)));
+    currentMass = (((__uint_as_float(optixGetPayload_2()) * bhNode.mass)) / __uint_as_float(optixGetPayload_7())) * .0001f;
+    optixSetPayload_1(__float_as_uint((totalMass + currentMass)));
   } 
   optixSetPayload_4(bhNode.nextPrimId);
   optixSetPayload_5(__float_as_uint(bhNode.nextRayLocation_x));
@@ -90,6 +79,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
   CustomRay currentRay = self.primaryLaunchRays[pixelID.x];
   Point point = optixLaunchParams.devicePoints[currentRay.pointID];
   deviceBhNode bhNode = optixLaunchParams.deviceBhNodes[currentRay.primID];
+
   // Calculate distance between point and bh node
   float dx = fabs(point.pos.x - bhNode.centerOfMassX);
   float dy = fabs(point.pos.y - bhNode.centerOfMassY);
@@ -101,8 +91,8 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
 
   unsigned int p0 = 0;                            // raySelf
   unsigned int p1 = __float_as_uint(0.0f);        // computedForce
-  unsigned int p2 = 0;                            // useless
-  unsigned int p3 = pointID;                      // pointID
+  unsigned int p2 = __float_as_uint(point.mass);  // point.mass
+  unsigned int p3 = currentRay.pointID;           // pointID
   unsigned int p4 = currentRay.primID;            // primID
   unsigned int p5 = __float_as_uint(currentRay.orgin.x);  // rayOrigin.x
   unsigned int p6 = __float_as_uint(currentRay.orgin.y);  // rayOrigin.y

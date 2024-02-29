@@ -131,6 +131,10 @@ void treeToDFSArray(Node* root) {
     currentBhNode.nextRayLocation_x = triangleXLocation;
     currentBhNode.nextRayLocation_y = level;
     currentBhNode.nextPrimId = primIDIndex;
+    currentBhNode.numParticles = currentNode->particles.size();
+    for(int i = 0; i < currentNode->particles.size(); i++) {
+      currentBhNode.particles[i] = currentNode->particles[i];
+    }
 
     deviceBhNodes.push_back(currentBhNode);
     primIDIndex++;
@@ -153,12 +157,29 @@ void orderPointsDFS() {
   int primaryRayIndex = 0;
   for(int i = 0; i < dfsBHNodes.size(); i++) {
     if(dfsBHNodes[i]->type == bhLeafNode) {
-      orderedPrimaryLaunchRays[primaryRayIndex].pointID = dfsBHNodes[i]->pointID;
-      orderedPrimaryLaunchRays[primaryRayIndex].primID = 0;
-      orderedPrimaryLaunchRays[primaryRayIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
-      primaryRayIndex++;
+      for(int j = 0; j < dfsBHNodes[i]->particles.size(); j++) {
+        orderedPrimaryLaunchRays[primaryRayIndex].pointID = dfsBHNodes[i]->particles[j];
+        orderedPrimaryLaunchRays[primaryRayIndex].primID = 0;
+        orderedPrimaryLaunchRays[primaryRayIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+        primaryRayIndex++;
+      }
     }
   }
+}
+
+int maxDepth(Node* node) {
+    if (node == nullptr) {
+        return 0;
+    } else {
+        int maxChildDepth = 0;
+        for (Node* child : node->children) {
+            int childDepth = maxDepth(child);
+            if (childDepth > maxChildDepth) {
+                maxChildDepth = childDepth;
+            }
+        }
+        return 1 + maxChildDepth;
+    }
 }
 
 void installAutoRopes(Node* root) {
@@ -204,6 +225,7 @@ void installAutoRopes(Node* root) {
 }
 
 int main(int ac, char **av) {
+  LOG("Starting");
 
   if(ac == 3) {  
     if(std::string(av[1]) == "new") {
@@ -268,6 +290,7 @@ int main(int ac, char **av) {
           //point.vel.y = velRead.u;
           //point.vel.z = velRead.z;
           point.mass = mass;
+          //printf("Point # %d has x = %f, y = %f, mass = %f\n", launchIndex, point.pos.x, point.pos.y, point.mass);
           point.idX = launchIndex;
 
           points.push_back(point);
@@ -277,7 +300,61 @@ int main(int ac, char **av) {
           launchIndex++;
       }
       fclose(inFile);
-    } else {
+    } else if(std::string(av[1]) == "csv") {
+      FILE *outFile = fopen("../points.txt", "w");
+      if (!outFile) {
+        std::cerr << "Error opening file for writing." << std::endl;
+        return 1;
+      }
+      fprintf(outFile, "%d\n", NUM_POINTS);
+      fprintf(outFile, "%d\n", NUM_STEPS);
+      fprintf(outFile, "%f\n", (0.025));
+      fprintf(outFile, "%f\n", (0.05));
+      fprintf(outFile, "%f\n", THRESHOLD);
+      std::ifstream file(av[2]);
+      if (!file.is_open()) {
+          std::cerr << "Error opening file!" << std::endl;
+          return 1;
+      }
+
+      std::string line;
+      int launchIndex = 0;
+      while(std::getline(file, line)) {
+        //printf("Line: %s\n", line.c_str());
+        // split line by comma
+        std::istringstream ss(line);
+        std::vector<std::string> tokens;
+        std::string token;
+        int index = 0;
+        Point point;
+        while (std::getline(ss, token, ',')) {
+            switch (index) {
+                case 0: point.pos.x = std::stof(token) * 1000.0f; break; 
+                case 1: point.pos.y = std::stof(token) * 1000.0f; break;
+                case 2: point.pos.z = std::stof(token) * 1000.0f; break;
+                case 3: point.mass = std::stof(token) * 10000.0f; break;
+                default: printf("Error reading csv file\n"); break;
+            }
+            tokens.push_back(token);
+            //printf("Token: %s\n", tokens[index].c_str());
+            index++;
+        }
+
+        point.idX = launchIndex;
+        fprintf(outFile, "%f %f %f %f %f %f %f\n", point.mass, point.pos.x, point.pos.y, point.pos.z, nullptr, nullptr, nullptr);
+        points.push_back(point);
+        primaryLaunchRays[launchIndex].pointID = launchIndex;
+        primaryLaunchRays[launchIndex].primID = 0;
+        primaryLaunchRays[launchIndex].orgin = vec3f(0.0f, 0.0f, 0.0f);
+        launchIndex++;
+        if(launchIndex == NUM_POINTS) {
+          break;
+        }
+      }
+      printf("Number of points: %lu\n", points.size());
+      fclose(outFile);
+    } 
+    else {
       std::cout << "Unsupported filetype format: " << av[1] << std::endl;
       return 1; // Exit with an error code
     }
@@ -295,13 +372,56 @@ int main(int ac, char **av) {
   Node* root = new Node(0.0f, 0.0f, 0.0f, gridSize, -1);
   root->type = bhNonLeafNode;
 
-  LOG("Bulding Tree with # Of Bodies = " << points.size());
+  LOG("Bulding Non Bucket Tree with # Of Bodies = " << points.size());
   auto tree_build_time_start = chrono::steady_clock::now();
   for(int i = 0; i < points.size(); i++) {
-    tree->insertNode(root, points[i], gridSize * 0.5);
+    Node* new_node = new Node(points[i].pos.x, points[i].pos.y, points[i].pos.z, gridSize * 0.5, points[i].idX);
+    new_node->mass = points[i].mass;
+    tree->insertNode(root, new_node, gridSize * 0.5);
   };
+
+  printf("Max depth of Non Bucket Tree: %d\n", maxDepth(root));
+
+  printf("Done building!\n");
+
+  std::vector<Node*> leaves;
+  float minS = GRID_SIZE + 1.0f;
+  tree->traverseOctreeDFS(root, leaves, &minS);
+  printf("Min S: %f\n", minS);
+
+  // create new tree with bucket sized leaf nodes
+  root = new Node(0.0f, 0.0f, 0.0f, gridSize, -1);
+  root->type = bhNonLeafNode;
+
+  int numLeaves;
+  numLeaves = std::ceil(leaves.size() / double(BUCKET_SIZE));
+  printf("Number of leaves: %d\n", numLeaves);
+
+  for(int i = 0; i < numLeaves; i++) {
+    Node* new_node = new Node(0.0f, 0.0f, 0.0f, gridSize * 0.5, -1);
+    vec3f cofm(0.0f, 0.0f, 0.0f);
+    float mass = 0.0f;
+    for(int j = 0; j < BUCKET_SIZE; j++) {
+      if((i * BUCKET_SIZE) + j < leaves.size()) {
+        cofm.x += leaves[(i * BUCKET_SIZE) + j]->cofm.x * leaves[(i * BUCKET_SIZE) + j]->mass;
+        cofm.y += leaves[(i * BUCKET_SIZE) + j]->cofm.y * leaves[(i * BUCKET_SIZE) + j]->mass;
+        cofm.z += leaves[(i * BUCKET_SIZE) + j]->cofm.z * leaves[(i * BUCKET_SIZE) + j]->mass;
+        mass += leaves[(i * BUCKET_SIZE) + j]->mass;
+        new_node->particles.push_back(leaves[(i * BUCKET_SIZE) + j]->pointID);
+      }
+    }
+    cofm.x /= mass;
+    cofm.y /= mass;
+    cofm.z /= mass;
+    new_node->cofm.x = cofm.x;
+    new_node->cofm.y = cofm.y;
+    new_node->cofm.z = cofm.z;
+    new_node->mass = mass;
+    tree->insertNode(root, new_node, gridSize * 0.5);
+  }
+  printf("Max depth of Bucket Tree: %d\n", maxDepth(root));
   tree->computeCOM(root);
-  //tree->printTree(root, 0);
+  ;
   auto tree_build_time_end = chrono::steady_clock::now();
   profileStats->treeBuildTime += chrono::duration_cast<chrono::microseconds>(tree_build_time_end - tree_build_time_start);
   auto iterative_step_time_start = chrono::steady_clock::now();
@@ -337,10 +457,10 @@ int main(int ac, char **av) {
   OWLGeomType trianglesGeomType = owlGeomTypeCreate(context, OWL_TRIANGLES, sizeof(TrianglesGeomData), trianglesGeomVars,-1);
   owlGeomTypeSetClosestHit(trianglesGeomType,0,module,"TriangleMesh");
   
-  printf("Size of malloc for vertices is %.2f gb.\n", (vertices.size() * sizeof(vec3f))/1000000000.0);
+  //printf("Size of malloc for vertices is %.2f gb.\n", (vertices.size() * sizeof(vec3f))/1000000000.0);
   totalMemoryNeeded += (vertices.size() * sizeof(vec3f)) / 1000000000.0;
   OWLBuffer vertexBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(vertices[0]), vertices.size(), vertices.data());
-  printf("Size of malloc for indices is %.2f gb.\n", (indices.size() * sizeof(vec3i))/1000000000.0);
+  //printf("Size of malloc for indices is %.2f gb.\n", (indices.size() * sizeof(vec3i))/1000000000.0);
   totalMemoryNeeded += (indices.size() * sizeof(vec3i)) / 1000000000.0;
   OWLBuffer indexBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(indices[0]), indices.size(), indices.data());
   OWLGeom trianglesGeom = owlGeomCreate(context,trianglesGeomType);
@@ -381,19 +501,19 @@ int main(int ac, char **av) {
 
   OWLParams lp = owlParamsCreate(context, sizeof(MyGlobals), myGlobalsVars, -1);
 
-  printf("Size of malloc for points is %.2f gb.\n", (points.size() * sizeof(Point))/1000000000.0);
+  //printf("Size of malloc for points is %.2f gb.\n", (points.size() * sizeof(Point))/1000000000.0);
   totalMemoryNeeded += (points.size() * sizeof(Point))/1000000000.0;
   OWLBuffer DevicePointsBuffer = owlDeviceBufferCreate( 
      context, OWL_USER_TYPE(points[0]), points.size(), points.data());
   owlParamsSetBuffer(lp, "devicePoints", DevicePointsBuffer);
 
-  printf("Size of malloc for bhNodes is %.2f gb.\n", (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0);
+  //printf("Size of malloc for bhNodes is %.2f gb.\n", (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0);
   totalMemoryNeeded += (deviceBhNodes.size() * sizeof(deviceBhNode))/1000000000.0;
   OWLBuffer DeviceBhNodesBuffer = owlDeviceBufferCreate( 
      context, OWL_USER_TYPE(deviceBhNodes[0]), deviceBhNodes.size(), deviceBhNodes.data());
   owlParamsSetBuffer(lp, "deviceBhNodes", DeviceBhNodesBuffer);
 
-  printf("Size of malloc for computedForces is %.2f gb.\n", (computedForces.size() * sizeof(float))/1000000000.0);
+  //printf("Size of malloc for computedForces is %.2f gb.\n", (computedForces.size() * sizeof(float))/1000000000.0);
   totalMemoryNeeded += (computedForces.size() * sizeof(float))/1000000000.0;
   OWLBuffer ComputedForcesBuffer = owlManagedMemoryBufferCreate( 
      context, OWL_FLOAT, NUM_POINTS, nullptr);
@@ -410,12 +530,11 @@ int main(int ac, char **av) {
       {"primaryLaunchRays",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,primaryLaunchRays)},
       {/* sentinel to mark end of list */}};
   
-  printf("Size of malloc for orderedPrimaryLaunchRays is %.2f gb.\n", (orderedPrimaryLaunchRays.size() * sizeof(CustomRay))/1000000000.0);
+  //printf("Size of malloc for orderedPrimaryLaunchRays is %.2f gb.\n", (orderedPrimaryLaunchRays.size() * sizeof(CustomRay))/1000000000.0);
   totalMemoryNeeded += (orderedPrimaryLaunchRays.size() * sizeof(CustomRay))/1000000000.0;
   OWLBuffer primaryLaunchRaysBuffer
     = owlDeviceBufferCreate(context,OWL_USER_TYPE(orderedPrimaryLaunchRays[0]),
                             orderedPrimaryLaunchRays.size(),orderedPrimaryLaunchRays.data());
-  printf("Hit here\n");
 
   // ........... create object  ............................
   OWLRayGen rayGen = owlRayGenCreate(context, module, "rayGen",
@@ -463,19 +582,19 @@ int main(int ac, char **av) {
   printf("----------------------------------------\n");
 
   int pointsFailing = 0;
-  // for(int i = 0; i < NUM_POINTS; i++) {
-  //   float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
-  //   if(percent_error > 5.0f) {
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // LOG_OK("POINT #" << i << ", (" << points[i].pos.x << ", " << points[i].pos.y << ") , HAS ERROR OF " << percent_error << "%");
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // printf("RT force = %f\n", rtComputedForces[i]);
-  //     // printf("CPU force = %f\n", cpuComputedForces[i]);
-  //     // LOG_OK("++++++++++++++++++++++++");
-  //     // printf("\n");
-  //     pointsFailing++;
-  //   }
-  // }
+  for(int i = 0; i < NUM_POINTS; i++) {
+    float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
+    if(percent_error > 5.0f) {
+      // LOG_OK("++++++++++++++++++++++++");
+      // LOG_OK("POINT #" << i << ", (" << points[i].pos.x << ", " << points[i].pos.y << ") , HAS ERROR OF " << percent_error << "%");
+      // LOG_OK("++++++++++++++++++++++++");
+      // printf("RT force = %f\n", rtComputedForces[i]);
+      // printf("CPU force = %f\n", cpuComputedForces[i]);
+      // LOG_OK("++++++++++++++++++++++++");
+      // printf("\n");
+      pointsFailing++;
+    }
+  }
   printf("Points failing percent error: %d\n", pointsFailing);
 
   // ##################################################################

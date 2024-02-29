@@ -7,12 +7,13 @@
 #define GRID_SIZE 10000.0f // this has to be smaller than the TRIANGLEX_THRESHOLD in hostCode.cpp
 #define THRESHOLD 0.6f
 #define GRAVITATIONAL_CONSTANT .0001f
+#define BUCKET_SIZE 32
 
 using namespace std;
 
 typedef enum _bh_node_type {
-	bhLeafNode,
-	bhNonLeafNode
+  bhNonLeafNode,
+	bhLeafNode
 } bh_node_type;
 
 namespace owl {
@@ -38,6 +39,7 @@ namespace owl {
     float s;
     vec3float cofm;
     Node* children[8];
+    std::vector<int> particles;
     int pointID;
     uint32_t dfsIndex;
 
@@ -53,6 +55,7 @@ namespace owl {
       for(int i = 0; i < 8; i++) {
         children[i] = nullptr;
       }
+      particles.reserve(BUCKET_SIZE);
       type = bhLeafNode;
       pointID = -1;
     }
@@ -71,10 +74,11 @@ namespace owl {
       BarnesHutTree(float theta, float gridSize);
       ~BarnesHutTree();
 
-      void insertNode(Node* node, const Point& point, float s);
+      void insertNode(Node* node, Node* point, float s);
       void computeCOM(Node *root);
       void printTree(Node* root, int depth);
-      void computeForces(Node* node, std::vector<Point> points, std::vector<float>& cpuComputedForces);
+      void computeForces(Node* node, std::vector<Point> &points, std::vector<float>& cpuComputedForces);
+      void traverseOctreeDFS(Node* node, std::vector<Node*>& leafNodes, float *minS);
       //void calculateCenterOfMass();
   };
 }
