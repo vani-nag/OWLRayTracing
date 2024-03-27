@@ -41,12 +41,12 @@ OPTIX_CLOSEST_HIT_PROGRAM(TriangleMesh)()
         float dy = point.pos.y - optixLaunchParams.devicePoints[pointID].pos.y;
         float dz = point.pos.z - optixLaunchParams.devicePoints[pointID].pos.z;
         float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
-        float force = ((point.mass * optixLaunchParams.devicePoints[pointID].mass) / r_2) * .0001f;
+        float force = ((point.mass * optixLaunchParams.devicePoints[pointID].mass) / r_2) * GRAVITATIONAL_CONSTANT;
         currentComputedForce += force;
       }
     }
   } else {
-    currentComputedForce += ((optixLaunchParams.devicePoints[pointID].mass * bhNode.mass) / __uint_as_float(optixGetPayload_7())) * .0001f;
+    currentComputedForce += ((optixLaunchParams.devicePoints[pointID].mass * bhNode.mass) / __uint_as_float(optixGetPayload_7())) * GRAVITATIONAL_CONSTANT;
   }
 
   optixSetPayload_1(__float_as_uint((currentComputedForce)));
@@ -71,7 +71,7 @@ OPTIX_MISS_PROGRAM(miss)()
         float dy = fabs(point.pos.y - optixLaunchParams.devicePoints[pointID].pos.y);
         float dz = fabs(point.pos.z - optixLaunchParams.devicePoints[pointID].pos.z);
         float r_2 = (dx * dx) + (dy * dy) + (dz * dz);
-        float force = ((point.mass * optixLaunchParams.devicePoints[pointID].mass) / r_2) * .0001f;
+        float force = ((point.mass * optixLaunchParams.devicePoints[pointID].mass) / r_2) * GRAVITATIONAL_CONSTANT;
         currentComputedForce += force;
       }
     }
@@ -140,7 +140,7 @@ OPTIX_RAYGEN_PROGRAM(rayGen)()
     dy = point.pos.y - bhNode.centerOfMassY;
     dz = point.pos.z - bhNode.centerOfMassZ;
     r_2 = (dx * dx) + (dy * dy) + (dz * dz);
-    rayLength = sqrtf(r_2) * THRESHOLD;
+    rayLength = sqrtf(r_2)  * THRESHOLD;
     p7 = __float_as_int(r_2);
     rayLength = sqrtf(rayLength);
 

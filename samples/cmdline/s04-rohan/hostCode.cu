@@ -24,6 +24,7 @@
 // our device-side data structures
 #include "GeomTypes.h"
 #include "kernels.h"
+#include "less.hpp"
 //#include "owlViewer/OWLViewer.h"
 
 // external helper stuff for image output
@@ -108,10 +109,12 @@ void treeToDFSArray(Node* root) {
     nodeStack.pop();
     // calculate triangle location
     triangleXLocation += std::sqrt(currentNode->s);
+    //triangleXLocation += currentNode->s;
     if(currentNode->s < minNodeSValue) minNodeSValue = currentNode->s;
     if(triangleXLocation >= TRIANGLEX_THRESHOLD) {
       level += 3.0f;
       triangleXLocation = std::sqrt(currentNode->s);
+      //triangleXLocation = currentNode->s;
     }
 
     // add triangle to scene corresponding to barnes hut node
@@ -332,7 +335,7 @@ int main(int ac, char **av) {
                 case 0: point.pos.x = std::stof(token) * 1000.0f; break; 
                 case 1: point.pos.y = std::stof(token) * 1000.0f; break;
                 case 2: point.pos.z = std::stof(token) * 1000.0f; break;
-                case 3: point.mass = std::stof(token) * 10000.0f; break;
+                case 3: point.mass = std::stof(token) * 1E8f; break;
                 default: printf("Error reading csv file\n"); break;
             }
             tokens.push_back(token);
@@ -364,6 +367,16 @@ int main(int ac, char **av) {
     std::cout << "Generate Synthetic Dataset: " << av[0] << " <new> <filepath>" << std::endl;
     return 1; // Exit with an error code
   }
+
+  using sortPoint = std::array<float, 5>;
+  std::vector<sortPoint> pts;
+  for(int i = 0; i < points.size(); i++) {
+    float ID = (float)points[i].idX;
+    pts.push_back({points[i].pos.x, points[i].pos.y, points[i].pos.z, points[i].mass, ID});
+    //printf("Point # %d has x = %f, y = %f, z=%f\n", i, points[i].pos.x, points[i].pos.y, points[i].pos.z);
+  }
+  std::sort(pts.begin(), pts.end(), zorder_knn::Less<sortPoint, 3>());
+
   auto total_run_time = chrono::steady_clock::now();
   // ##################################################################
   // Building Barnes Hut Tree
@@ -374,20 +387,17 @@ int main(int ac, char **av) {
 
   LOG("Bulding Non Bucket Tree with # Of Bodies = " << points.size());
   auto tree_build_time_start = chrono::steady_clock::now();
-  for(int i = 0; i < points.size(); i++) {
-    Node* new_node = new Node(points[i].pos.x, points[i].pos.y, points[i].pos.z, gridSize * 0.5, points[i].idX);
-    new_node->mass = points[i].mass;
-    tree->insertNode(root, new_node, gridSize * 0.5);
-  };
-
-  printf("Max depth of Non Bucket Tree: %d\n", maxDepth(root));
-
-  printf("Done building!\n");
-
   std::vector<Node*> leaves;
-  float minS = GRID_SIZE + 1.0f;
-  tree->traverseOctreeDFS(root, leaves, &minS);
-  printf("Min S: %f\n", minS);
+
+
+  int numDifferent = 0;
+  for(int i = 0; i < pts.size(); i++) {
+    Node *new_node = new Node(pts[i][0], pts[i][1], pts[i][2], gridSize * 0.5, (int)pts[i][4]);
+    new_node->mass = pts[i][3];
+    leaves.push_back(new_node);
+  }
+
+  printf("Number of different points: %d\n", numDifferent);
 
   // create new tree with bucket sized leaf nodes
   root = new Node(0.0f, 0.0f, 0.0f, gridSize, -1);
@@ -576,7 +586,7 @@ int main(int ac, char **av) {
   printf("CPU OUTPUT!!!\n");
   printf("----------------------------------------\n");
   auto cpu_forces_start_time = chrono::steady_clock::now();
-  //tree->computeForces(root, points, cpuComputedForces);
+  tree->computeForces(root, points, cpuComputedForces);
   auto cpu_forces_end_time = chrono::steady_clock::now();
   profileStats->cpuForceCalculationTime += chrono::duration_cast<chrono::microseconds>(cpu_forces_end_time - cpu_forces_start_time);
   printf("----------------------------------------\n");
@@ -585,13 +595,13 @@ int main(int ac, char **av) {
   for(int i = 0; i < NUM_POINTS; i++) {
     float percent_error = (abs((rtComputedForces[i] - cpuComputedForces[i])) / cpuComputedForces[i]) * 100.0f;
     if(percent_error > 5.0f) {
-      // LOG_OK("++++++++++++++++++++++++");
-      // LOG_OK("POINT #" << i << ", (" << points[i].pos.x << ", " << points[i].pos.y << ") , HAS ERROR OF " << percent_error << "%");
-      // LOG_OK("++++++++++++++++++++++++");
-      // printf("RT force = %f\n", rtComputedForces[i]);
-      // printf("CPU force = %f\n", cpuComputedForces[i]);
-      // LOG_OK("++++++++++++++++++++++++");
-      // printf("\n");
+      LOG_OK("++++++++++++++++++++++++");
+      LOG_OK("POINT #" << i << ", (" << points[i].pos.x << ", " << points[i].pos.y << ") , HAS ERROR OF " << percent_error << "%");
+      LOG_OK("++++++++++++++++++++++++");
+      printf("RT force = %f\n", rtComputedForces[i]);
+      printf("CPU force = %f\n", cpuComputedForces[i]);
+      LOG_OK("++++++++++++++++++++++++");
+      printf("\n");
       pointsFailing++;
     }
   }

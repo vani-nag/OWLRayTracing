@@ -6,7 +6,7 @@
 
 #define GRID_SIZE 10000.0f // this has to be smaller than the TRIANGLEX_THRESHOLD in hostCode.cpp
 #define THRESHOLD 0.6f
-#define GRAVITATIONAL_CONSTANT .0001f
+#define GRAVITATIONAL_CONSTANT .1f
 #define BUCKET_SIZE 32
 
 using namespace std;
